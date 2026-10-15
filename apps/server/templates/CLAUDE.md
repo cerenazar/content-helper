@@ -20,13 +20,15 @@ Bu klasör, Ceren'in yerel **cerenbuilds editörü**nde açık bir proje. Sen ed
   "scenes": [ { "id": "sc_…", "name": "Hook", "chip": null | { "label": "SUBAGENTS", "color": "orange|sage|lav|sky|gold|ink" } } ],
   "captions": [ { "id": "cap_…", "text": "Ben çay içerken", "emph": null | "çay", "scene": 1, "dur": null | 1.1 } ],
   "clips": [ { "id": "clip_…", "path": "/abs/yol.mov", "name": "…", "probe": { … } } ],
-  "edl":   [ { "id": "cut_…", "clip": "clip_…", "in": 12.4, "dur": 2.1, "kind": "face|hands" } ]
+  "edl":   [ { "id": "cut_…", "clip": "clip_…", "in": 12.4, "dur": 2.1, "kind": "face|hands" } ],
+  "sfx":   [ { "id": "sfx_…", "src": "media/sfx-pop.wav", "at": 2.4, "gain": 1 } ]   // eski dosyalarda yok = []
 }
 ```
 - **Caption'lar:** en fazla 3 kelime. `emph`, `text` içinde birebir geçen kelime ya da kelimeler olmalı. Vurgu ölçülü olmalı: 40 parçada ~7–8. `scene` 1'den başlar ve sahne sırasını belirler.
 - `dur: null` → süre skill formülüyle hesaplanır: `0.34 + 0.039×karakter`, vurgu varsa +0.3, `.`/`?` ile bitiyorsa +0.15, sonuç 0.62–1.7 arasına sıkıştırılır. Sonda 1.2 sn bekleme. Başlangıç ve bitiş saklanmaz, sıradan hesaplanır. Sadece gerekirse `dur` ver.
 - Toplam süre 35–45 sn olmalı. Hook ilk 3 sn içinde biter: selam yok, 12 kelimenin altında, sonuçla başlar.
 - **EDL:** kesitler sırayla oynar ve toplamları caption süresine (+1.2 sn) eşit olmalı. Sahne başına 1–2 kesim kullan, aynı kesiti tekrarlama. `kind`: yüz çekimi için `face`, el/masa için `hands`. `clips` listesini değiştirme (editör yönetir). Yalnızca var olan `clip` id'lerini kullan.
+- **SFX (ses efektleri):** `src` proje klasörüne göre yol ve dosya `media/` altında **var olmalı**. Yeni dosya ekleme ya da indirme; yalnızca projede zaten olan `media/…` seslerini kullan (hazır efektler eklendiğinde `media/sfx-pop.wav`, `sfx-click`, `sfx-whoosh`, `sfx-ding`, `sfx-blip` adıyla gelir). Ceren başka bir efekt isterse editördeki Ses efektleri sekmesinden eklemesini söyle. `at`: reel saniyesi (≥ 0, toplam süreden küçük olmalı yoksa duyulmaz). `gain`: 0–2 arası doğrusal kazanç, varsayılan 1. Export'ta `audio: "silent"` ise tek ses efektlerdir; `"speech"` ise konuşmanın üstüne karışır. Efektleri ölçülü kullan: sahne geçişinde whoosh, pop-in anında pop, vurgulu caption'da click/ding gibi, ~2–4 sn'de birden sık değil.
 - Yeni öğelere benzersiz id ver (`cap_` + 7 harf/rakam gibi).
 
 ## project.json (carousel)
