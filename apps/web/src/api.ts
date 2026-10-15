@@ -67,6 +67,10 @@ export const api = {
   sheet: (slug: string, clip: string) => req<{ frames: { t: number; file: string }[] }>('GET', `${P(slug)}/clips/${clip}/sheet`),
   wave: (slug: string, clip: string) => req<{ peaks: number[]; rate: number }>('GET', `${P(slug)}/clips/${clip}/wave`),
   addImages: (slug: string, paths: string[]) => req<{ srcs: string[] }>('POST', `${P(slug)}/images`, { paths }),
+  addVideos: (slug: string, paths: string[]) =>
+    req<{ videos: { id: string; path: string; name: string; probe: Clip['probe'] }[] }>('POST', `${P(slug)}/videos`, { paths }),
+  videoProxy: (slug: string, path: string) => req<{ id: string; status: 'ready' | 'running' | 'missing'; duration: number }>('POST', `${P(slug)}/videos/proxy`, { path }),
+  exportCarousel: (slug: string, fmt: 'png' | 'jpg') => req<{ job: Job }>('POST', `${P(slug)}/export-carousel`, { fmt }),
   exportReel: (slug: string) => req<{ job: Job }>('POST', `${P(slug)}/export`),
   saveSlide: (slug: string, name: string, data: string) => req<{ path: string }>('POST', `${P(slug)}/exports/${name}`, { data }),
   reveal: (path: string) => req('POST', '/api/reveal', { path }),

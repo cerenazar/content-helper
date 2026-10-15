@@ -6,8 +6,9 @@ import type { Clip } from '@cb/schema';
 import { PORT, FONTS_DIR, files, ROOT } from './paths';
 import { subscribe } from './events';
 import { listProjects, listSeries, createProject, readProject, writeProject, snapshot, listHistory, restoreSnapshot, watchProject, writeClaudeMd } from './projects';
-import { makeClip, ensureProxy, proxyStatus, proxyPath, keyframeSheet, sheetDir, waveform, sendFile, pickFiles } from './media';
+import { makeClip, videoClip, ensureProxy, proxyStatus, proxyPath, keyframeSheet, sheetDir, waveform, sendFile, pickFiles } from './media';
 import { exportReel, renderBundle, RENDER_HTML } from './export';
+import { exportCarousel } from './carouselExport';
 import { askClaude, chatHistory, resetChat, stopClaude, isRunning } from './claude';
 import { run } from './ffmpeg';
 import { readIdeas, writeIdeas } from './ideas';
@@ -97,6 +98,22 @@ app.get<{ Params: P & { clip: string } }>('/api/projects/:slug/clips/:clip/wave'
   return { peaks: await waveform(req.params.slug, clip), rate: 50 };
 });
 
+/**
+ * Carousel pencere videoları: kaynak mutlak yolla referanslanır (kopyalanmaz). Önizleme proxy'si arka planda
+ * hazırlanır; id yoldan türetilir, proxy.mp4 uç noktası reel klipleriyle aynıdır.
+ */
+app.post<{ Params: P; Body: { paths: string[] } }>('/api/projects/:slug/videos', async (req) => {
+  const videos = await Promise.all(req.body.paths.map((p) => videoClip(p)));
+  for (const v of videos) void ensureProxy(req.params.slug, v);
+  return { videos: videos.map((v) => ({ id: v.id, path: v.path, name: v.name, probe: v.probe })) };
+});
+
+app.post<{ Params: P; Body: { path: string } }>('/api/projects/:slug/videos/proxy', async (req) => {
+  const v = await videoClip(req.body.path);
+  void ensureProxy(req.params.slug, v);
+  return { id: v.id, status: proxyStatus(req.params.slug, v.id), duration: v.probe.duration };
+});
+
 /** Carousel görselleri: proje klasöründeki media/ altına kopyalanır (küçük dosyalar). */
 app.post<{ Params: P; Body: { paths: string[] } }>('/api/projects/:slug/images', async (req) => {
   const dir = path.join(files(req.params.slug).dir, 'media');
@@ -119,6 +136,11 @@ app.get<{ Params: P & { file: string } }>('/api/projects/:slug/media/:file', (re
 
 // ---- Export ----
 app.post<{ Params: P }>('/api/projects/:slug/export', async (req) => ({ job: await exportReel(req.params.slug) }));
+
+/** Carousel export: videosuz slaytlar PNG/JPG, pencerede video olan slaytlar 4:5 MP4. İlerleme SSE ile. */
+app.post<{ Params: P; Body: { fmt?: 'png' | 'jpg' } }>('/api/projects/:slug/export-carousel', async (req) => ({
+  job: await exportCarousel(req.params.slug, req.body?.fmt === 'jpg' ? 'jpg' : 'png'),
+}));
 
 app.get<{ Params: P & { file: string } }>('/api/projects/:slug/exports/:file', (req, reply) => {
   const file = path.basename(req.params.file);

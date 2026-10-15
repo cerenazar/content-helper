@@ -16,6 +16,17 @@ export const PICKS = {
   pillShade: 0.62,
 } as const;
 
+/** Pencerenin video/ekran görüntüsü alanı (başlık çubuğunun altı). Export'ta video buraya oturur. */
+export function windowContentRect(el: Pick<SlideElement, 'x' | 'y' | 'w' | 'h'>) {
+  return { x: el.x, y: el.y + PICKS.window.bar, w: el.w, h: Math.max(0, el.h - PICKS.window.bar) };
+}
+
+/** Slayttaki görünür video öğeleri (yalnız picks stilinde pencere videoları çizilir). */
+export function slideVideos(p: CarouselProject, index: number): SlideElement[] {
+  if (p.style !== 'picks') return [];
+  return (p.slides[index]?.elements ?? []).filter((e) => e.type === 'window' && !!e.video && !e.hidden);
+}
+
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 export type ImageSource = CanvasImageSource & { width: number; height: number };
 
@@ -228,6 +239,8 @@ export function createCarouselRenderer(g: Ctx) {
     return total;
   }
 
+  let holes = false;
+
   function picksElement(el: SlideElement, images: Map<string, ImageSource>, t: number, accent: string): number {
     switch (el.type) {
       case 'title':
@@ -243,14 +256,17 @@ export function createCarouselRenderer(g: Ctx) {
       }
       case 'window': {
         const wn = P.window;
-        const img = el.src ? images.get(el.src) : undefined;
+        // Video karesi (önizlemede <video>) yoksa ekran görüntüsü poster olarak kullanılır.
+        const img = (el.video ? images.get(el.video) : undefined) ?? (el.src ? images.get(el.src) : undefined);
+        const r = windowContentRect(el);
         g.save();
         kit.rr(el.x, el.y, el.w, el.h, wn.radius);
         g.clip();
         g.fillStyle = '#161616';
         g.fillRect(el.x, el.y, el.w, el.h);
-        if (img) cover(img, el.x, el.y + wn.bar, el.w, el.h - wn.bar);
-        else kit.text('ekran görüntüsü', el.x + el.w / 2, el.y + wn.bar + (el.h - wn.bar) / 2, 30, '#8a8a8a', P.INTER, 500);
+        if (el.video && holes) g.clearRect(r.x, r.y, r.w, r.h); // export: video ffmpeg ile alta konur
+        else if (img) cover(img, r.x, r.y, r.w, r.h);
+        else kit.text(el.video ? 'video yükleniyor' : 'ekran görüntüsü', r.x + r.w / 2, r.y + r.h / 2, 30, '#8a8a8a', P.INTER, 500);
         g.fillStyle = wn.barColor;
         g.fillRect(el.x, el.y, el.w, wn.bar);
         wn.dots.forEach((c, i) => {
@@ -290,8 +306,15 @@ export function createCarouselRenderer(g: Ctx) {
   return {
     kit,
     /** Slaytı çizer. Dönen değer: metni kutusundan taşan öğelerin id → gereken yükseklik. */
-    render(p: CarouselProject, index: number, images: Map<string, ImageSource> = new Map(), t = 0.2): Map<string, number> {
+    render(
+      p: CarouselProject,
+      index: number,
+      images: Map<string, ImageSource> = new Map(),
+      t = 0.2,
+      opts: { videoHoles?: boolean } = {},
+    ): Map<string, number> {
       const slide: Slide | undefined = p.slides[index];
+      holes = !!opts.videoHoles;
       const overflow = new Map<string, number>();
       g.save();
       g.clearRect(0, 0, W, H);
@@ -300,6 +323,7 @@ export function createCarouselRenderer(g: Ctx) {
       else background(p, index);
       const accent = slide?.accent ?? PICKS_GOLD;
       slide?.elements.forEach((el) => {
+        if (el.hidden) return;
         const used = picks ? picksElement(el, images, t, accent) : element(el, images, t);
         if (used > el.h + 2) overflow.set(el.id, Math.ceil(used));
       });
