@@ -24,7 +24,41 @@ export interface Idea {
   url: string | null;
   createdAt: number;
   project: string | null;
+  /** Link analizi; yalnızca sunucu yazar. */
+  analysis?: Analysis;
 }
+
+export interface Analysis {
+  status: 'running' | 'done' | 'error';
+  step: string;
+  startedAt: number;
+  finishedAt: number | null;
+  meta: { title: string; uploader: string; platform: string; description: string; duration: number | null; viewCount: number | null; likeCount: number | null } | null;
+  frames: string[];
+  hasSubtitles: boolean;
+  note: string;
+  error: string | null;
+}
+
+export type ResearchKind = 'trends' | 'topic' | 'formats' | 'free';
+export interface Hook {
+  text: string;
+  why: string;
+  source?: string;
+}
+export interface ResearchRun {
+  id: string;
+  kind: ResearchKind;
+  prompt: string;
+  createdAt: number;
+  status: 'running' | 'done' | 'error' | 'stopped';
+  steps: string[];
+  summary: string;
+  hooks: Hook[];
+  error: string | null;
+}
+
+export type HubEvent = { type: 'analysis'; slug: string; id: string; analysis: Analysis } | { type: 'research'; slug: string; run: ResearchRun };
 
 export interface Job {
   id: string;
@@ -58,6 +92,13 @@ export const api = {
   series: () => req<{ series: { slug: string; series: string; category: string; number: number }[] }>('GET', '/api/series'),
   ideas: () => req<{ ideas: Idea[] }>('GET', '/api/ideas'),
   saveIdeas: (ideas: Idea[]) => req<{ ideas: Idea[] }>('PUT', '/api/ideas', { ideas }),
+  analyze: (id: string) => req<{ analysis: Analysis }>('POST', `/api/ideas/${encodeURIComponent(id)}/analyze`),
+  frameUrl: (id: string, file: string) => `/api/inspiration/${encodeURIComponent(id)}/${file}`,
+  research: () => req<{ niche: string; defaultNiche: string; runs: ResearchRun[]; running: boolean }>('GET', '/api/research'),
+  saveNiche: (niche: string) => req<{ niche: string }>('PUT', '/api/research/niche', { niche }),
+  startResearch: (kind: ResearchKind, prompt?: string) => req<{ run: ResearchRun }>('POST', '/api/research', { kind, prompt }),
+  stopResearch: (id: string) => req('POST', `/api/research/${id}/stop`),
+  deleteResearch: (id: string) => req('DELETE', `/api/research/${id}`),
   get: (slug: string) => req<{ slug: string; project: Project; scenes: string; claudeRunning: boolean }>('GET', P(slug)),
   save: (slug: string, project: Project, scenes: string) => req<{ ok: true }>('PUT', P(slug), { project, scenes }),
   restore: (slug: string, id: string) => req<{ project: Project; scenes: string }>('POST', `${P(slug)}/history/${id}/restore`),
@@ -82,6 +123,13 @@ export const api = {
 
 export function events(slug: string, on: (e: ServerEvent) => void): () => void {
   const es = new EventSource(`${P(slug)}/events`);
+  es.onmessage = (m) => on(JSON.parse(m.data));
+  return () => es.close();
+}
+
+/** Ana sayfa olayları (analiz ve araştırma ilerlemesi). */
+export function hubEvents(on: (e: HubEvent) => void): () => void {
+  const es = new EventSource('/api/events');
   es.onmessage = (m) => on(JSON.parse(m.data));
   return () => es.close();
 }

@@ -108,6 +108,22 @@ export const Bulb = (p: P) => (
     <path d="M8 16.5h4" />
   </Svg>
 );
+export const Search = (p: P) => (
+  <Svg {...p}>
+    <circle cx="8.75" cy="8.75" r="5" />
+    <path d="m12.5 12.5 4 4" />
+  </Svg>
+);
+export const Sparkle = (p: P) => (
+  <Svg {...p}>
+    <path d="M10 3.5c.5 3.4 2.6 5.5 6 6-3.4.5-5.5 2.6-6 6-.5-3.4-2.6-5.5-6-6 3.4-.5 5.5-2.6 6-6Z" />
+  </Svg>
+);
+export const Stop = (p: P) => (
+  <Svg {...p}>
+    <rect x="5.5" y="5.5" width="9" height="9" rx="1.5" fill="currentColor" />
+  </Svg>
+);
 export const LinkIcon = (p: P) => (
   <Svg {...p}>
     <path d="M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2l-1 1" />

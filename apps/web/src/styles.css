@@ -171,6 +171,87 @@ code { font: 12px var(--mono); color: var(--text); }
 .idea-acts .btn.icon { width: 32px; }
 .empty { color: var(--text-2); padding: 18px 2px; margin: 0; }
 
+/* Link analizi: fikrin altında, metin sütununda. Claude çalışırken turuncu. */
+.ana-btn svg { color: var(--claude); }
+.ana { grid-column: 2 / -1; min-width: 0; }
+.ana.running { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-s); background: var(--claude-bg); color: var(--text); font-size: 13px; width: fit-content; max-width: 100%; }
+.ana-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--claude); animation: ana-pulse 1.4s ease-in-out infinite; flex: none; }
+@keyframes ana-pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
+.ana.failed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ana.failed .err { margin: 0; font-size: 13px; max-width: 64ch; }
+.ana.done { border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--bay-1); }
+.ana.done > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; cursor: pointer; list-style: none; border-radius: var(--r-m); }
+.ana.done > summary::-webkit-details-marker { display: none; }
+.ana.done > summary::after { content: ''; width: 7px; height: 7px; margin-left: auto; border-right: 1.6px solid var(--text-2); border-bottom: 1.6px solid var(--text-2); rotate: 45deg; translate: 0 -2px; transition: rotate 160ms var(--ease); flex: none; }
+.ana.done[open] > summary::after { rotate: 225deg; translate: 0 2px; }
+.ana.done > summary:hover { background: var(--bay-2); }
+.ana.done > summary svg { color: var(--claude); }
+.ana-sum-t { font-weight: 600; font-size: 13px; }
+.ana-stats { color: var(--text-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ana-frames { list-style: none; margin: 0; padding: 4px 12px 0; display: flex; gap: 6px; overflow-x: auto; }
+.ana-frames li { flex: none; }
+.ana-frames img { display: block; height: 112px; width: auto; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 4px; background: var(--bay-2); }
+.ana-nosub { margin: 10px 12px 0; }
+.ana-note { padding: 4px 12px 0; }
+.ana-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; }
+.ana-acts .btn.claude { min-height: 36px; }
+.ana-acts .btn.small { min-height: 32px; }
+
+/* Claude'un yazdığı markdown (not ve araştırma özeti) */
+.md { font-size: 14px; line-height: 1.55; max-width: 72ch; overflow-wrap: anywhere; }
+.md h3, .md h4, .md h5 { margin: 16px 0 6px; font-size: 14px; font-weight: 700; }
+.md h3 { font-size: 15px; }
+.md > :first-child { margin-top: 8px; }
+.md p { margin: 0 0 8px; }
+.md ul, .md ol { margin: 0 0 8px; padding-left: 20px; }
+.md li { margin: 2px 0; }
+.md li::marker { color: var(--text-3); }
+.md a { color: var(--sel); }
+.md blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 2px solid var(--rule); color: var(--text-2); }
+.md pre { margin: 0 0 8px; padding: 8px 10px; background: var(--bay-2); border-radius: var(--r-s); font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+.md code { background: var(--bay-2); padding: 1px 4px; border-radius: 3px; }
+
+/* Araştır */
+.rs .field > span { font-size: 12px; }
+.rs-niche { display: grid; gap: 8px; max-width: 760px; margin-bottom: 28px; }
+.rs-niche .textarea, .rs-free .textarea { font-size: 14px; }
+.rs-niche .btn { min-height: 36px; }
+.rs-scans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.rs-card { display: grid; grid-template-rows: auto 1fr auto; gap: 8px; align-content: start; padding: 16px; background: var(--bay-1); border: 1px solid var(--rule); border-radius: 12px; min-width: 0; }
+.rs-card h2 { margin: 0; font: 700 15px/1.3 var(--ui); }
+.rs-card p { margin: 0; color: var(--text-2); font-size: 13px; }
+.rs-card .input { min-height: 36px; }
+.rs-card .btn { justify-self: start; min-height: 36px; }
+.rs-free { display: flex; align-items: end; gap: 8px; margin-top: 12px; max-width: 760px; }
+.rs-free .btn { min-height: 44px; }
+.rs-runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; max-width: 860px; }
+.rs-run { padding: 14px 16px; background: var(--bay-1); border: 1px solid var(--rule); border-radius: 12px; }
+.rs-run.running { border-color: var(--claude); box-shadow: inset 3px 0 0 var(--claude); }
+.rs-run-h { display: flex; align-items: start; gap: 12px; }
+.rs-run-h h3 { margin: 0; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.rs-run-h .btn.small { min-height: 32px; }
+.rs-run-h .btn.icon { width: 32px; }
+.rs-run-meta { color: var(--text-2); font-size: 12px; }
+.rs-status.running { color: var(--claude); }
+.rs-status.done { color: var(--ok); }
+.rs-status.error { color: var(--err); }
+.rs-run > .err { margin: 10px 0 0; font-size: 13px; }
+.rs-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; font-size: 12px; color: var(--text-2); }
+.rs-steps li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-steps li.now { color: var(--text); display: flex; align-items: center; gap: 8px; }
+.rs-steps li.now::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--claude); animation: ana-pulse 1.4s ease-in-out infinite; flex: none; }
+.hooks { list-style: none; counter-reset: hook; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.hook { counter-increment: hook; display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.hook::before { content: counter(hook); color: var(--text-3); font: 12px/22px var(--mono); text-align: right; }
+.hook-body { display: grid; gap: 2px; min-width: 0; }
+.hook-text { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.hook-why { margin: 0; color: var(--text-2); font-size: 13px; }
+.hook-acts { display: flex; gap: 6px; }
+.hook-acts .btn.small { min-height: 32px; }
+.rs-sum { margin-top: 10px; }
+.rs-sum > summary { cursor: pointer; color: var(--text-2); font-size: 13px; min-height: 32px; display: flex; align-items: center; width: fit-content; padding: 0 4px; border-radius: var(--r-s); }
+.rs-sum > summary:hover { color: var(--text); }
+
 @media (max-width: 860px) {
   .hub { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .hub-nav { flex-direction: row; align-items: center; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--rule); overflow-x: auto; }
@@ -180,9 +261,16 @@ code { font: 12px var(--mono); color: var(--text); }
   .create-tiles { grid-template-columns: 1fr; }
   .idea { grid-template-columns: 28px 1fr; }
   .idea-acts { grid-column: 2; flex-wrap: wrap; }
+  .rs-scans { grid-template-columns: 1fr; }
+  .rs-free { flex-direction: column; align-items: stretch; }
+  .rs-free .btn { justify-content: center; }
+  .hook { grid-template-columns: 20px 1fr; }
+  .hook-acts { grid-column: 2; flex-wrap: wrap; }
+  .ana-stats { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tile, .pthumb { transition: none; }
+  .tile, .pthumb, .ana.done > summary::after { transition: none; }
+  .ana-pulse, .rs-steps li.now::before { animation: none; }
 }
 
 /* ---- Editör iskeleti ---- */

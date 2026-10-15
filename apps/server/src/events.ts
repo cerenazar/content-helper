@@ -1,11 +1,18 @@
 import type { FastifyReply } from 'fastify';
+import type { Analysis } from './analysis';
+import type { ResearchRun } from './research-lib';
 
 /** Sunucudan tarayıcıya olaylar (SSE). Kanal = proje slug'ı ya da '*'. */
 export type ServerEvent =
   | { type: 'project-changed'; slug: string; source: 'claude' | 'external'; project: unknown; scenes: string }
   | { type: 'project-invalid'; slug: string; error: string }
   | { type: 'job'; slug: string; job: Job }
-  | { type: 'claude'; slug: string; event: ClaudeEvent };
+  | { type: 'claude'; slug: string; event: ClaudeEvent }
+  /** Ana sayfa kanalı (HUB): link analizi ve araştırma ilerlemesi. */
+  | { type: 'analysis'; slug: typeof HUB; id: string; analysis: Analysis }
+  | { type: 'research'; slug: typeof HUB; run: ResearchRun };
+
+export const HUB = '_hub';
 
 export interface Job {
   id: string;

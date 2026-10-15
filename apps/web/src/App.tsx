@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Home, type Section } from './Home';
 import { Editor } from './Editor';
 
-/** Basit hash yönlendirme: #/ → ana sayfa, #/projects, #/ideas, #/p/<slug> → editör. */
+/** Basit hash yönlendirme: #/ → ana sayfa, #/projects, #/ideas, #/research, #/p/<slug> → editör. */
 function useRoute() {
   const [hash, setHash] = useState(location.hash);
   useEffect(() => {
@@ -11,7 +11,7 @@ function useRoute() {
     return () => removeEventListener('hashchange', on);
   }, []);
   const m = /^#\/p\/([a-z0-9-]+)/.exec(hash);
-  const section: Section = hash.startsWith('#/projects') ? 'projects' : hash.startsWith('#/ideas') ? 'ideas' : 'home';
+  const section: Section = hash.startsWith('#/projects') ? 'projects' : hash.startsWith('#/ideas') ? 'ideas' : hash.startsWith('#/research') ? 'research' : 'home';
   return { slug: m ? m[1] : null, section };
 }
 
