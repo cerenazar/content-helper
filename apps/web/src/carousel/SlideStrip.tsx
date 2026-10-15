@@ -110,7 +110,7 @@ export function SlideStrip({
           onClose={() => setMenu(null)}
           items={[
             ['Çoğalt', () => act.duplicate(menu.i)],
-            ['Sonrasına boş slayt ekle', () => act.addAfter(menu.i)],
+            ['Sonrasına slayt ekle', () => act.addAfter(menu.i)],
             ['Sola taşı', () => act.move(menu.i, menu.i - 1), menu.i === 0],
             ['Sağa taşı', () => act.move(menu.i, menu.i + 2), menu.i === n - 1],
             ['Sil', () => act.remove(menu.i), n <= 1, true],

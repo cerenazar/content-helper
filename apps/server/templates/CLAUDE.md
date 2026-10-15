@@ -37,9 +37,12 @@ Bu klasör, Ceren'in yerel **cerenbuilds editörü**nde açık bir proje. Sen ed
   "slides": [ { "id": "sl_…", "bg": null | "media/foto.jpg", "accent": null | "#E0168F", "elements": [
     { "id": "el_…", "type": "title|text|image|window|pill|chip|agent", "x": 76, "y": 300, "w": 925, "h": 200,
       "text": "…", "emph": null | "metindeki birebir parça", "size": 64, "color": "ink|orange|sage|lav|sky|gold",
-      "align": "left|center|right", "src": null | "media/gorsel.png", "fill": null | "#RRGGBB", "weight": null | 400–900 } ] } ] }
+      "align": "left|center|right", "src": null | "media/gorsel.png", "fill": null | "#RRGGBB", "weight": null | 400–900,
+      "hidden": false, "locked": false, "video": null | "/mutlak/yol/klip.mov" } ] } ] }
 ```
-Slayt boyutu 1080×1350.
+Slayt boyutu 1080×1350. `elements` dizisindeki sıra katman sırasıdır: sonraki öğe üstte çizilir.
+- `hidden: true` olan öğe çizilmez (export'ta da yok). `locked: true` olan öğeyi Ceren kilitlemiş: konumuna, boyutuna dokunma, silme; yalnızca açıkça istenirse değiştir.
+- `video` (yalnızca `window`, picks stili): pencere içinde oynayan videonun **mutlak** kaynak yolu. Dosya kopyalanmaz. Yeni video yolu uydurma; yalnızca Ceren'in verdiği ya da projede zaten geçen yolları kullan. `video` varsa `src` poster görseli olarak kalabilir. Videolu slayt export'ta 4:5 MP4 olur (1080×1350, en fazla 60 sn, 30 MB altı); diğer slaytlar PNG/JPG.
 
 ### style: "picks" (Ceren's Picks, varsayılan)
 - Siyah zemin, Inter. **Üst bant** (`handle` solda, `category` sağda, altında çizgi, y < 81) ve **alt bant** (`series / 004` solda, `02/07` sağda, üstünde çizgi, y > 1259) **otomatik çizilir**. Bunları öğe olarak ekleme. Sayfa numarasını ve seri numarasını metne yazma. İlk sayfada sayfa numarası zaten çıkmaz. Öğeleri 100–1240 arasında tut.

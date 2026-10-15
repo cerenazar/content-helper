@@ -116,9 +116,61 @@ try {
     await until(async () => (await disk(car.slug)).slides[0].elements[0].y > before.y + 50);
   });
 
+  await step('carousel: çift tıkla yerinde metin düzenle, Esc kaydeder', async () => {
+    await page.locator('.el-box >> nth=0').dblclick();
+    const ta = page.locator('.inline-edit');
+    await ta.waitFor();
+    await ta.fill('Yerinde düzenlendi');
+    await page.keyboard.press('Escape');
+    await until(async () => (await disk(car.slug)).slides[0].elements[0].text === 'Yerinde düzenlendi');
+    assert.equal(await page.locator('.inline-edit').count(), 0);
+  });
+
+  await step('carousel: ⇧-tık çoklu seçim, birlikte taşınır', async () => {
+    const before = (await disk(car.slug)).slides[0].elements.map((e) => e.y);
+    await page.locator('.el-box >> nth=0').click();
+    await page.locator('.el-box >> nth=1').click({ modifiers: ['Shift'] });
+    assert.equal(await page.locator('.el-box[aria-selected=true]').count(), 2);
+    const b = await page.locator('.el-box >> nth=1').boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2 - 60, { steps: 6 });
+    await page.mouse.up();
+    await until(async () => {
+      const ys = (await disk(car.slug)).slides[0].elements.map((e) => e.y);
+      return ys[0] < before[0] - 30 && ys[1] < before[1] - 30 && Math.abs(ys[0] - before[0] - (ys[1] - before[1])) <= 1;
+    });
+  });
+
+  await step('carousel: ⌘D çoğaltır, ⌘C/⌘V başka slayta yapıştırır', async () => {
+    await page.keyboard.press('Meta+d');
+    await until(async () => (await disk(car.slug)).slides[0].elements.length === 4);
+    const d = (await disk(car.slug)).slides[0].elements;
+    assert.equal(d[2].x, d[0].x + 20, 'kopya 20 px kayar');
+    assert.notEqual(d[2].id, d[0].id);
+    await page.keyboard.press('Meta+c');
+    await page.click('.thumb >> nth=1');
+    const n = (await disk(car.slug)).slides[1].elements.length;
+    await page.keyboard.press('Meta+v');
+    await until(async () => (await disk(car.slug)).slides[1].elements.length === n + 2);
+  });
+
+  await step('carousel: katmanlar paneli gizle ve kilitle', async () => {
+    await page.locator('.layer >> nth=0').getByRole('button', { name: 'Gizle' }).click();
+    await until(async () => (await disk(car.slug)).slides[1].elements.at(-1).hidden === true);
+    await page.locator('.layer >> nth=1').getByRole('button', { name: 'Kilitle' }).click();
+    await until(async () => (await disk(car.slug)).slides[1].elements.at(-2).locked === true);
+  });
+
   await step('carousel: slayt ekle', async () => {
     await page.click('text=Slayt ekle');
     await until(async () => (await disk(car.slug)).slides.length === 3);
+  });
+
+  await step('carousel: slaytı sürükleyerek sırala', async () => {
+    const ids = (await disk(car.slug)).slides.map((s) => s.id);
+    await page.locator('.thumb-wrap >> nth=2').dragTo(page.locator('.thumb-wrap >> nth=0'), { targetPosition: { x: 5, y: 40 } });
+    await until(async () => (await disk(car.slug)).slides.map((s) => s.id).join() === [ids[2], ids[0], ids[1]].join());
   });
   await page.screenshot({ path: path.join(OUT, 'carousel.png') });
 

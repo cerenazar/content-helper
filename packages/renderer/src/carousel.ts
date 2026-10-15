@@ -216,11 +216,11 @@ export function createCarouselRenderer(g: Ctx) {
         push(emph, true);
         push(para.slice(at + emph.length), false);
       } else push(para, false);
+      // Boş paragraf tek boş satırdır (wrapWords boş girdide zaten bir boş satır döndürür).
       let hi = 0;
       for (const line of wrapWords(g, words, el.w, font, spaceW)) {
         lines.push({ words: line, hot: line.map(() => hot[hi++]) });
       }
-      if (!words.length) lines.push({ words: [], hot: [] });
     }
     const total = lines.length * lineH;
     let y = (opts.center ? el.y + (el.h - total) / 2 : el.y) + lineH / 2;
