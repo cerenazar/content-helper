@@ -113,7 +113,7 @@ export function Research({ busy, ideas, onAddIdea, onCreateReel }: { busy: boole
           <span>Nişin (her taramada Claude'a verilir)</span>
           <textarea
             className="textarea"
-            rows={2}
+            rows={3}
             value={niche}
             onChange={(e) => {
               setNiche(e.target.value);
@@ -179,7 +179,7 @@ export function Research({ busy, ideas, onAddIdea, onCreateReel }: { busy: boole
           <span>Ya da kendin sor</span>
           <textarea
             className="textarea"
-            rows={2}
+            rows={3}
             value={free}
             onChange={(e) => setFree(e.target.value)}
             onKeyDown={(e) => {
