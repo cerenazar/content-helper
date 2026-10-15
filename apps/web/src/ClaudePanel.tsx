@@ -34,6 +34,13 @@ function describe(p: Project, sel: Selection, time: number): { short: string; fu
         short = `sahne ${i + 1}: ${p.scenes[i].name}`;
         lines.unshift(`seçili sahne #${i + 1} id=${sel.id} (scenes.js içinde scene${i + 1}) ad="${p.scenes[i].name}"`);
       }
+    } else if (sel?.kind === 'sfx') {
+      const i = p.sfx.findIndex((k) => k.id === sel.id);
+      const c = p.sfx[i];
+      if (c) {
+        short = `ses efekti ${i + 1}`;
+        lines.unshift(`seçili ses efekti #${i + 1} id=${c.id}: dosya=${c.src} başlangıç=${c.at} sn kazanç=${c.gain}`);
+      }
     } else if (sel?.kind === 'clip') {
       const c = p.clips.find((k) => k.id === sel.id);
       if (c) {

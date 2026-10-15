@@ -53,6 +53,15 @@ export const Cut = z.object({
   kind: z.enum(CROP_KINDS),
 });
 
+/** Ses efekti: proje klasörüne göre dosya (media/…), reel zamanında `at` sn'de çalar. */
+export const Sfx = z.object({
+  id: z.string(),
+  src: z.string().min(1),
+  at: z.number().min(0),
+  /** Doğrusal kazanç: 1 = olduğu gibi, 0 = sessiz, en fazla 2. */
+  gain: z.number().min(0).max(2).default(1),
+});
+
 export const ReelProject = z.object({
   version: z.literal(1),
   kind: z.literal('reel'),
@@ -63,6 +72,8 @@ export const ReelProject = z.object({
   captions: z.array(Caption),
   clips: z.array(Clip).default([]),
   edl: z.array(Cut).default([]),
+  /** Eski dosyalarda yok: boş liste olarak okunur. */
+  sfx: z.array(Sfx).default([]),
 });
 
 const HEX = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'renk #RRGGBB biçiminde olmalı');
@@ -128,6 +139,7 @@ export type Scene = z.infer<typeof Scene>;
 export type Probe = z.infer<typeof Probe>;
 export type Clip = z.infer<typeof Clip>;
 export type Cut = z.infer<typeof Cut>;
+export type Sfx = z.infer<typeof Sfx>;
 export type ReelProject = z.infer<typeof ReelProject>;
 export type SlideElement = z.infer<typeof SlideElement>;
 export type Slide = z.infer<typeof Slide>;

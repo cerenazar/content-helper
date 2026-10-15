@@ -3,6 +3,7 @@ import { createReelRenderer, ensureFonts, cutAt, cropRect, displaySize, type Ree
 import { REEL, type ReelProject } from '@cb/schema';
 import { useStore } from '../store';
 import { api } from '../api';
+import { tickSfx } from './sfxAudio';
 
 /**
  * 9:16 önizleme. Üst yarı ve caption'lar export'la AYNI renderer'dan gelir.
@@ -83,14 +84,20 @@ export function Preview({ slug, project, scenes }: { slug: string; project: Reel
       const dur = r.timeline.duration;
       let t = st.time;
       if (st.playing) {
-        t = t + (now - last) / 1000;
+        // J/K/L: rate negatifse geri, 2/4 ise hızlı
+        t = t + ((now - last) / 1000) * st.rate;
         if (t >= dur) {
           t = dur;
+          st.setPlaying(false);
+        } else if (t <= 0) {
+          t = 0;
           st.setPlaying(false);
         }
         useStore.setState({ time: t });
       }
       last = now;
+      const fwd = st.playing && st.rate > 0;
+      tickSfx(p.sfx, t, st.playing, st.rate);
       const at = cutAt(p, t);
       // Videoları senkronla
       for (const [id, v] of videos.current) {
@@ -99,13 +106,15 @@ export function Preview({ slug, project, scenes }: { slug: string; project: Reel
           if (!v.paused) v.pause();
           continue;
         }
-        v.muted = !(p.audio === 'speech' && st.playing);
-        if (st.playing) {
+        v.muted = !(p.audio === 'speech' && fwd);
+        if (fwd) {
+          if (v.playbackRate !== st.rate) v.playbackRate = st.rate;
           if (v.paused) {
             v.currentTime = at.srcT;
             void v.play().catch(() => {});
-          } else if (Math.abs(v.currentTime - at.srcT) > 0.12) v.currentTime = at.srcT;
+          } else if (Math.abs(v.currentTime - at.srcT) > 0.12 * st.rate) v.currentTime = at.srcT;
         } else {
+          // Durunca ya da geri oynatırken: video durur, kare kare aranır
           if (!v.paused) v.pause();
           if (Math.abs(v.currentTime - at.srcT) > 0.02 && !v.seeking) v.currentTime = at.srcT;
         }

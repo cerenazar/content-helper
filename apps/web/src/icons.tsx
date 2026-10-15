@@ -130,3 +130,34 @@ export const LinkIcon = (p: P) => (
     <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l1-1" />
   </Svg>
 );
+export const Scissors = (p: P) => (
+  <Svg {...p}>
+    <circle cx="5.5" cy="5.5" r="2.5" />
+    <circle cx="5.5" cy="14.5" r="2.5" />
+    <path d="M7.5 7 16.5 15M7.5 13 16.5 5" />
+  </Svg>
+);
+export const Magnet = (p: P) => (
+  <Svg {...p}>
+    <path d="M4.5 3.5v7a5.5 5.5 0 0 0 11 0v-7" />
+    <path d="M8.5 3.5v7a1.5 1.5 0 0 0 3 0v-7" />
+    <path d="M4.5 7h4M11.5 7h4" />
+  </Svg>
+);
+export const Minus = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 10h12" />
+  </Svg>
+);
+export const Speaker = (p: P) => (
+  <Svg {...p}>
+    <path d="M3.5 8v4h3l4 3.5v-11l-4 3.5z" />
+    <path d="M13.5 7.5a3.5 3.5 0 0 1 0 5M15.5 5.5a6.5 6.5 0 0 1 0 9" />
+  </Svg>
+);
+export const Keyboard = (p: P) => (
+  <Svg {...p}>
+    <rect x="2.5" y="5" width="15" height="10" rx="2" />
+    <path d="M5.5 8h1M9.5 8h1M13.5 8h1M5.5 11h1M8.5 11.5h3M13.5 11h1" />
+  </Svg>
+);

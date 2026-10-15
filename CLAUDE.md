@@ -45,4 +45,7 @@ npm workspaces: `packages/schema` (zod), `packages/renderer` (canvas drawing), `
 ## Conventions
 
 - UI shell tokens live in `apps/web/src/styles.css`: dark neutral chrome, sky = selection/playhead, orange reserved for Claude-related UI. Keep WCAG AA contrast, visible focus, keyboard access, and `prefers-reduced-motion`.
-- Planned next phases (not yet built) are in README: idea notes and inspiration links, Whisper caption alignment, SFX track.
+- Timeline edit math (split, trim, ripple, reorder, snapping, zoom) and the export SFX filter builder are pure functions in `packages/renderer/src/edit.ts`, unit-tested in `packages/renderer/test/edit.test.ts`. The web calls them through `apps/web/src/reel/actions.ts`.
+- SFX: `sfx[]` on ReelProject (`src` is project-relative under `media/`). Built-in sounds live in `apps/server/assets/sfx/` (self-generated, CC0). Preview plays them via WebAudio (`apps/web/src/reel/sfxAudio.ts`); export mixes them with `sfxFilter()`.
+- Ideas, link analysis (`apps/server/src/inspire.ts`) and the Araştır research runs (`apps/server/src/research.ts`) live under hidden files/folders in `$CB_ROOT` (`.ideas.json`, `.inspiration/`, `.research.json`, `.research/`); `listProjects` skips dot-folders.
+- Planned next phases (not yet built) are in README: Whisper transcripts and caption alignment.

@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { newId, type Clip } from '@cb/schema';
-import { files } from './paths';
+import { files, SFX_DIR } from './paths';
 import { run, probe } from './ffmpeg';
 import { startJob } from './events';
 
@@ -137,9 +137,9 @@ export function sendFile(req: FastifyRequest, reply: FastifyReply, file: string,
 export { proxyPath, sheetDir };
 
 /** macOS'un kendi dosya seçicisi (tarayıcı gerçek yolu veremez). */
-export async function pickFiles(kind: 'video' | 'image'): Promise<string[]> {
-  const types = kind === 'video' ? '{"public.movie"}' : '{"public.image"}';
-  const prompt = kind === 'video' ? 'Video seç' : 'Görsel seç';
+export async function pickFiles(kind: 'video' | 'image' | 'audio'): Promise<string[]> {
+  const types = kind === 'video' ? '{"public.movie"}' : kind === 'audio' ? '{"public.audio"}' : '{"public.image"}';
+  const prompt = kind === 'video' ? 'Video seç' : kind === 'audio' ? 'Ses efekti seç' : 'Görsel seç';
   const script = `set fs to choose file with prompt "${prompt}" of type ${types} with multiple selections allowed
 set out to ""
 repeat with f in fs
@@ -153,4 +153,56 @@ return out`;
     if (/-128/.test((e as Error).message)) return []; // kullanıcı vazgeçti
     throw e;
   }
+}
+
+export const AUDIO_EXT = /\.(wav|mp3|m4a|aac|aif|aiff|caf|ogg|flac)$/i;
+
+export const MEDIA_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.aif': 'audio/aiff',
+  '.aiff': 'audio/aiff',
+  '.caf': 'audio/x-caf',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac',
+};
+
+/** Hazır ses efektleri: assets/sfx altındaki .wav dosyaları. */
+export async function builtinSfx(): Promise<{ name: string; file: string }[]> {
+  const list = await fs.readdir(SFX_DIR).catch(() => [] as string[]);
+  return list.filter((f) => f.endsWith('.wav')).sort().map((f) => ({ name: f.replace(/\.wav$/, ''), file: f }));
+}
+
+/**
+ * Ses efektlerini proje klasörünün media/ altına kopyalar (küçük dosyalar; proje taşınabilir kalsın).
+ * builtin: hazır efektin adı (ör. "pop"); aynı efekt ikinci kez kopyalanmaz.
+ */
+export async function addSfxFiles(slug: string, input: { paths?: string[]; builtin?: string }): Promise<string[]> {
+  const dir = path.join(files(slug).dir, 'media');
+  await fs.mkdir(dir, { recursive: true });
+  const out: string[] = [];
+  if (input.builtin) {
+    const file = path.basename(input.builtin).replace(/\.wav$/, '') + '.wav';
+    const src = path.join(SFX_DIR, file);
+    if (!existsSync(src)) throw Object.assign(new Error('Hazır efekt bulunamadı: ' + input.builtin), { statusCode: 404 });
+    const name = 'sfx-' + file;
+    if (!existsSync(path.join(dir, name))) await fs.copyFile(src, path.join(dir, name));
+    out.push('media/' + name);
+  }
+  for (const p of input.paths ?? []) {
+    const abs = path.resolve(p.replace(/^~(?=\/)/, os.homedir()));
+    if (!AUDIO_EXT.test(abs)) throw Object.assign(new Error('Ses dosyası değil: ' + path.basename(abs)), { statusCode: 422 });
+    if (!existsSync(abs)) throw Object.assign(new Error('Dosya bulunamadı: ' + abs), { statusCode: 404 });
+    const name = Date.now().toString(36) + '-' + path.basename(abs).replace(/[^\w.-]+/g, '_');
+    await fs.copyFile(abs, path.join(dir, name));
+    out.push('media/' + name);
+  }
+  return out;
 }

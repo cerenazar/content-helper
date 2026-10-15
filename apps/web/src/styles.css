@@ -329,7 +329,7 @@ code { font: 12px var(--mono); color: var(--text); }
 .tl-track.caps { height: 52px; }
 .tl-track.cuts { height: 56px; }
 .tl-label { position: sticky; left: 0; width: 92px; margin-left: -92px; height: 100%; display: flex; align-items: center; padding-left: 12px; color: var(--text-2); font-size: 12px; background: var(--bay-1); z-index: 2; border-right: 1px solid var(--rule); }
-.tl-lane { position: absolute; left: 92px; top: 0; bottom: 0; right: 0; }
+.tl-lane { position: absolute; left: 0; top: 0; bottom: 0; right: 0; }
 .blk { position: absolute; top: 6px; bottom: 6px; border-radius: 5px; background: var(--bay-2); border: 1px solid var(--rule); overflow: hidden; cursor: pointer; display: flex; align-items: center; padding: 0 6px; font-size: 11px; color: var(--text-2); white-space: nowrap; transition: box-shadow .6s var(--ease), border-color .6s var(--ease); }
 .blk.flash, .blk[aria-selected='true'] { transition-duration: .16s; }
 .blk:hover { border-color: var(--text-3); }
@@ -414,8 +414,69 @@ code { font: 12px var(--mono); color: var(--text); }
 .strip .add-tile:hover { border-color: var(--text-3); color: var(--text); }
 .strip .thumb span { position: absolute; left: 4px; bottom: 4px; background: rgba(31,26,23,.8); color: #fff; font: 600 10px var(--mono); padding: 1px 4px; border-radius: 3px; }
 
+
+/* ---- Reel düzeni (CapCut gibi): medya | önizleme | özellikler (seçime göre) | Claude; altta tam genişlik timeline ---- */
+.editor.reel {
+  grid-template-columns: 264px minmax(0, 1fr) 0 360px;
+  grid-template-rows: 48px minmax(0, 1fr) 6px var(--tl-h, 300px);
+  grid-template-areas: 'top top top top' 'left stage insp right' 'split split split split' 'bottom bottom bottom bottom';
+}
+.editor.reel.insp-open { grid-template-columns: 264px minmax(0, 1fr) 300px 360px; }
+.editor.reel .insp { grid-area: insp; border-left: 1px solid var(--rule); background: var(--bay-1); overflow: auto; min-height: 0; min-width: 0; }
+.editor.reel .left { display: grid; grid-template-rows: auto 1fr; align-content: start; }
+.editor.reel .left > [role='tabpanel'] { min-height: 0; overflow: auto; }
+.editor.reel .left .tabs .count { margin-left: 6px; padding: 0 5px; border-radius: 99px; background: var(--bay-3); color: var(--text); font-size: 11px; }
+.editor.reel .claude-col { grid-template-rows: auto minmax(0, 1fr); }
+.editor.reel .claude-h { border-bottom: 1px solid var(--rule); padding-bottom: 10px; }
+.editor.reel .claude-h h2 { color: var(--claude); }
+.claude-run { color: var(--claude); font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.claude-run .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--claude); animation: pulse 1.2s ease-in-out infinite; }
+.editor.reel .claude-body { min-height: 0; overflow: hidden; }
+.editor.reel .transport { flex-wrap: wrap; row-gap: 6px; }
+.editor.reel .transport .meter { margin-left: auto; }
+.transport .rate { color: var(--sel); font-weight: 600; }
+.tl-split { grid-area: split; cursor: row-resize; background: var(--bay-0); border-top: 1px solid var(--rule); position: relative; }
+.tl-split::after { content: ''; position: absolute; left: 50%; top: 1px; width: 36px; height: 3px; margin-left: -18px; border-radius: 2px; background: var(--bay-3); }
+.tl-split:hover::after, .tl-split:focus-visible::after { background: var(--sel); }
+.tl-split:focus-visible { outline-offset: -2px; }
+.tl-wrap { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.tl-wrap .timeline { overflow: auto; }
+.tl-zoom { width: 120px; accent-color: var(--sel); }
+.tl-corner { position: sticky; left: 0; width: 92px; margin-left: -92px; height: 100%; background: var(--bay-1); z-index: 3; border-right: 1px solid var(--rule); }
+.tl-ruler { position: sticky; top: 0; z-index: 5; background: var(--bay-1); }
+.tl-track.scenes { height: 34px; }
+.tl-track.scenes .blk { top: 5px; bottom: 5px; }
+.tl-track.cuts { height: 62px; }
+.tl-track.sfx { min-height: 42px; }
+.tl-empty { position: absolute; left: 12px; top: 50%; translate: 0 -50%; white-space: nowrap; }
+.blk.cut.dragging { opacity: 0.85; z-index: 6; box-shadow: 0 6px 18px rgba(0,0,0,.5), 0 0 0 1px var(--sel); cursor: grabbing; transition: none; }
+.blk.cut { cursor: grab; }
+.blk.sfx { background: #1f2b22; border-color: #33473a; padding: 0 4px; cursor: grab; }
+.blk.sfx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.blk.sfx .sfx-name { position: relative; z-index: 1; font-size: 10px; color: var(--text); text-shadow: 0 1px 2px #000; }
+.tl-drop { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: var(--sel); border-radius: 2px; z-index: 7; pointer-events: none; }
+.tl-guide { position: absolute; top: 26px; bottom: 0; width: 0; border-left: 1px dashed var(--warn); pointer-events: none; z-index: 6; }
+.tl-tip { position: absolute; top: 30px; translate: 6px 0; background: var(--bay-3); color: var(--text); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; pointer-events: none; z-index: 8; white-space: nowrap; }
+.handle { width: 10px; }
+.handle.l { border-left: 3px solid transparent; }
+.blk[aria-selected='true'] .handle { background: rgba(127,176,220,.22); }
+.sfx-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 3px 4px; border-radius: var(--r-s); }
+.sfx-row:hover { background: var(--bay-2); }
+.sfx-row .name { font-weight: 600; }
+.keys-dialog { width: min(560px, 100%); }
+.keys { margin: 0; display: grid; gap: 2px; }
+.keys-row { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.keys-row:last-child { border-bottom: 0; }
+.keys dt { display: flex; gap: 4px; flex-wrap: wrap; }
+.keys dd { margin: 0; color: var(--text-2); }
+kbd { font: 600 11px var(--mono); min-width: 24px; text-align: center; padding: 2px 6px; border-radius: 4px; background: var(--bay-2); border: 1px solid var(--rule); border-bottom-width: 2px; color: var(--text); }
+
 @media (max-width: 1180px) {
   .editor { grid-template-columns: 220px 1fr 330px; }
+}
+@media (max-width: 1180px) {
+  .editor.reel { grid-template-columns: 220px minmax(0, 1fr) 0 320px; }
+  .editor.reel.insp-open { grid-template-columns: 220px minmax(0, 1fr) 270px 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

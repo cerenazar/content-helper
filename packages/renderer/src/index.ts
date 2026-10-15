@@ -5,3 +5,4 @@ export * from './carousel';
 export * from './templates';
 export * from './crop';
 export * from './fonts';
+export * from './edit';

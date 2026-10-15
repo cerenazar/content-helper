@@ -3,10 +3,10 @@ import os from 'node:os';
 import fs from 'node:fs/promises';
 import Fastify from 'fastify';
 import type { Clip } from '@cb/schema';
-import { PORT, FONTS_DIR, files, ROOT } from './paths';
+import { PORT, FONTS_DIR, SFX_DIR, files, ROOT } from './paths';
 import { subscribe, HUB } from './events';
 import { listProjects, listSeries, createProject, readProject, writeProject, snapshot, listHistory, restoreSnapshot, watchProject, writeClaudeMd } from './projects';
-import { makeClip, ensureProxy, proxyStatus, proxyPath, keyframeSheet, sheetDir, waveform, sendFile, pickFiles } from './media';
+import { makeClip, ensureProxy, proxyStatus, proxyPath, keyframeSheet, sheetDir, waveform, sendFile, pickFiles, builtinSfx, addSfxFiles, MEDIA_TYPES } from './media';
 import { exportReel, renderBundle, RENDER_HTML } from './export';
 import { askClaude, chatHistory, resetChat, stopClaude, isRunning } from './claude';
 import { run } from './ffmpeg';
@@ -82,7 +82,10 @@ app.post<{ Params: P; Body: { label?: string } }>('/api/projects/:slug/snapshot'
 app.post<{ Params: P & { id: string } }>('/api/projects/:slug/history/:id/restore', async (req) => restoreSnapshot(req.params.slug, req.params.id));
 
 // ---- Medya ----
-app.post('/api/pick', async (req) => ({ paths: await pickFiles(((req.body as any)?.kind as 'video' | 'image') || 'video') }));
+app.post('/api/pick', async (req) => {
+  const k = (req.body as any)?.kind;
+  return { paths: await pickFiles(k === 'image' || k === 'audio' ? k : 'video') };
+});
 
 app.post<{ Params: P; Body: { paths: string[] } }>('/api/projects/:slug/clips', async (req) => {
   const clips = await Promise.all(req.body.paths.map((p) => makeClip(p)));
@@ -129,10 +132,15 @@ app.post<{ Params: P; Body: { paths: string[] } }>('/api/projects/:slug/images',
 
 app.get<{ Params: P & { file: string } }>('/api/projects/:slug/media/:file', (req, reply) => {
   const file = path.basename(req.params.file);
-  const ext = path.extname(file).toLowerCase();
-  const type = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+  const type = MEDIA_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
   return sendFile(req, reply, path.join(files(req.params.slug).dir, 'media', file), type);
 });
+
+// ---- Ses efektleri ----
+app.get('/api/sfx', async () => ({ sfx: await builtinSfx() }));
+app.get<{ Params: { file: string } }>('/api/sfx/:file', (req, reply) => sendFile(req, reply, path.join(SFX_DIR, path.basename(req.params.file)), 'audio/wav'));
+/** Ses efekti ekle: dosyalar (paths) ya da hazır efekt (builtin) proje media/ altına kopyalanır. */
+app.post<{ Params: P; Body: { paths?: string[]; builtin?: string } }>('/api/projects/:slug/sfx', async (req) => ({ srcs: await addSfxFiles(req.params.slug, req.body ?? {}) }));
 
 // ---- Export ----
 app.post<{ Params: P }>('/api/projects/:slug/export', async (req) => ({ job: await exportReel(req.params.slug) }));

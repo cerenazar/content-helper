@@ -81,9 +81,15 @@ try {
     await until(async () => (await disk(slug)).captions[0].dur === null);
   });
 
-  await step('format kontrolü görünür', async () => {
+  await step('seçim kalkınca panel kapanır, Proje düğmesi format kontrolünü açar', async () => {
     await page.keyboard.press('Escape');
+    await page.waitForSelector('.insp', { state: 'detached' });
+    await page.getByRole('button', { name: 'Proje', exact: true }).click();
     await page.waitForSelector('text=Format kontrolü');
+  });
+
+  await step('Claude paneli her zaman görünür', async () => {
+    assert.ok(await page.isVisible('.claude-col textarea'));
   });
   await page.screenshot({ path: path.join(OUT, 'reel.png') });
 
@@ -100,6 +106,116 @@ try {
     await page.waitForSelector('.invalid-banner', { timeout: 5000 });
     assert.ok(await page.isVisible('.blk.cap:has-text("dışarıdan")'));
   });
+
+  // ---- CapCut tarzı timeline: böl, kırp, ripple sil, sırala, SFX ----
+  const { execFileSync } = await import('node:child_process');
+  const video = path.join(ROOT, 'e2e-kaynak.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=30:d=12', '-f', 'lavfi', '-i', 'sine=f=330:d=12', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', video]);
+  const ed = await api('/api/projects', { title: 'e2e kurgu ' + Date.now(), kind: 'reel' });
+  const edGet = await fetch(`${WEB}/api/projects/${ed.slug}`).then((r) => r.json());
+  const { clips } = await api(`/api/projects/${ed.slug}/clips`, { paths: [video] });
+  const p0 = { ...edGet.project, clips, edl: [
+    { id: 'cut_a', clip: clips[0].id, in: 1, dur: 2, kind: 'face' },
+    { id: 'cut_b', clip: clips[0].id, in: 5, dur: 2, kind: 'hands' },
+    { id: 'cut_c', clip: clips[0].id, in: 8, dur: 2, kind: 'face' },
+  ] };
+  await fetch(`${WEB}/api/projects/${ed.slug}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: p0, scenes: edGet.scenes }) });
+  await page.goto(`${WEB}/#/p/${ed.slug}`);
+  await page.waitForSelector('.blk.cut');
+  const edl = async () => (await disk(ed.slug)).edl;
+
+  await step('B: oynatma kafasında kesiti böl', async () => {
+    await page.click('.preview-wrap');
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Shift+ArrowRight'); // 1.0 sn, ilk kesitin ortası
+    await page.keyboard.press('b');
+    const e = await until(async () => ((await edl()).length === 4 ? edl() : null));
+    assert.deepEqual([e[0].in, e[0].dur, e[1].in, e[1].dur], [1, 1, 2, 1]);
+  });
+
+  await step('kesit sağ kenarını sürükle → süre kısalır (ripple)', async () => {
+    const h = page.locator('.blk.cut >> nth=2').locator('.handle.r');
+    const b = await h.boundingBox();
+    await page.mouse.move(b.x + 5, b.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(b.x - 25, b.y + 10, { steps: 6 });
+    await page.mouse.up();
+    const e = await until(async () => ((await edl())[2].dur < 1.9 ? edl() : null));
+    assert.equal(e[2].in, 5, 'giriş değişmemeli');
+  });
+
+  await step('kesit sol kenarını sürükle → giriş ilerler, kaynak sınırı korunur', async () => {
+    const h = page.locator('.blk.cut >> nth=3').locator('.handle.l');
+    const b = await h.boundingBox();
+    await page.mouse.move(b.x + 4, b.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(b.x + 30, b.y + 10, { steps: 6 });
+    await page.mouse.up();
+    const e = await until(async () => ((await edl())[3].in > 8 ? edl() : null));
+    assert.ok(e[3].dur < 2 && Math.abs(e[3].in + e[3].dur - 10) < 0.01, 'çıkış noktası sabit: ' + JSON.stringify(e[3]));
+  });
+
+  await step('kesiti sürükleyerek sırala', async () => {
+    const ids = (await edl()).map((c) => c.id);
+    const a = await page.locator('.blk.cut >> nth=0').boundingBox();
+    const last = await page.locator('.blk.cut >> nth=3').boundingBox();
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(last.x + last.width + 10, a.y + a.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await until(async () => (await edl()).at(-1).id === ids[0]);
+  });
+
+  await step('⌫ ile ripple sil: boşluk kalmaz', async () => {
+    await page.click('.blk.cut >> nth=0');
+    await page.keyboard.press('Backspace');
+    await until(async () => (await edl()).length === 3);
+    const starts = await page.$$eval('.blk.cut', (els) => els.map((e) => parseFloat(e.style.left)));
+    assert.equal(starts[0], 0);
+  });
+
+  await step('⌘+ timeline yakınlaştırır', async () => {
+    const w0 = await page.$eval('.tl-inner', (e) => e.getBoundingClientRect().width);
+    await page.keyboard.press('Meta+Equal');
+    await until(async () => (await page.$eval('.tl-inner', (e) => e.getBoundingClientRect().width)) > w0 * 1.3);
+  });
+
+  await step('SFX: hazır efekti ekle → diske ve media/ altına yazılır', async () => {
+    await page.keyboard.press('Home');
+    await page.getByRole('tab', { name: /Ses efektleri/ }).click();
+    await page.getByRole('button', { name: 'pop efektini ekle' }).click();
+    const sfx = await until(async () => ((await disk(ed.slug)).sfx.length === 1 ? (await disk(ed.slug)).sfx : null));
+    assert.equal(sfx[0].src, 'media/sfx-pop.wav');
+    await fs.access(path.join(ROOT, ed.slug, 'media', 'sfx-pop.wav'));
+    await page.waitForSelector('.blk.sfx');
+  });
+
+  await step('SFX bloğunu sürükle → başlangıç değişir', async () => {
+    const b = await page.locator('.blk.sfx >> nth=0').boundingBox();
+    await page.mouse.move(b.x + 4, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + 120, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await until(async () => (await disk(ed.slug)).sfx[0].at > 0.3);
+    await page.waitForSelector('text=Ses düzeyi');
+  });
+
+  await step('L oynatır, K durdurur', async () => {
+    await page.click('.preview-wrap');
+    await page.keyboard.press('Home');
+    await page.keyboard.press('l');
+    await page.waitForTimeout(500);
+    await page.keyboard.press('k');
+    assert.notEqual(await page.textContent('.transport .time'), '0:00.00');
+  });
+
+  await step('? kısayol listesini açar, Esc kapatır', async () => {
+    await page.keyboard.press('?');
+    await page.waitForSelector('role=dialog[name="Klavye kısayolları"]');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.keys-dialog', { state: 'detached' });
+  });
+  await page.screenshot({ path: path.join(OUT, 'reel-kurgu.png') });
 
   const car = await api('/api/projects', { title: 'e2e carousel ' + Date.now(), kind: 'carousel' });
   await page.goto(`${WEB}/#/p/${car.slug}`);

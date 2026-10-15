@@ -38,19 +38,35 @@ Gerekenler:
 
 ## Kısayollar (reel)
 
+Editörde `?` tuşu aynı listeyi açar (`apps/web/src/reel/Shortcuts.tsx`).
+
 | Tuş | İş |
 |---|---|
 | Boşluk | Oynat / durdur |
+| J / K / L | Geri oynat / durdur / ileri oynat (tekrar basınca 2×, 4×) |
 | ← → | 1 kare (⇧ ile 1 sn) |
-| Home | Başa dön |
-| ⌫ | Seçili caption'ı ya da kesiti sil |
-| Esc | Seçimi kaldır |
+| Home / End | Başa / sona git |
+| B veya ⌘B | Oynatma kafasında kesiti böl |
+| ⌫ | Seçili caption'ı, kesiti ya da ses efektini sil (kesitte boşluk kapanır) |
+| ⌥← / ⌥→ | Seçili kesiti bir sıra öne / arkaya taşı |
+| ⌘+ / ⌘− / ⌘0 | Timeline yakınlaştır / uzaklaştır / sığdır (ctrl + tekerlek ya da iki parmakla da) |
+| N | Yapışmayı aç / kapat (oynatma kafası, kesit, caption ve SFX kenarları) |
+| Esc | Seçimi kaldır, özellik panelini kapat |
 | ⌘Z / ⇧⌘Z | Geri al / yinele |
+| ? | Kısayol listesi |
+
+Timeline'da kesit kenarlarını sürükleyerek kırp (kaynak videonun sınırları korunur), kesitin gövdesini sürükleyerek sırala. Timeline'ın üst kenarı sürüklenerek (ya da odaklanıp ↑ ↓ ile) yükseltilebilir.
+
+## Ses efektleri
+
+Medya panelindeki **Ses efektleri** sekmesinden hazır efektler ya da bilgisayardaki bir ses dosyası oynatma kafasına eklenir. Dosyalar projenin `media/` klasörüne kopyalanır. Önizlemede WebAudio ile çalar; export'ta ffmpeg `adelay` + `amix` ile karışır (`silent`: yalnızca efektler, `speech`: konuşmanın üstüne).
+
+Hazır efektler (`pop`, `click`, `whoosh`, `ding`, `blip`) bu repo için ffmpeg ile sıfırdan üretildi, lisansı CC0: `apps/server/assets/sfx/` (`generate.sh` ile yeniden üretilir, ayrıntı `LICENSE.md`).
 
 ## Testler
 
 ```sh
-npm test              # birim: zamanlama (Python formülüyle birebir), kırpma, şema
+npm test              # birim: zamanlama (Python formülüyle birebir), kırpma, şema, timeline düzenleme, SFX filtresi
 npm run typecheck
 # Sunucu ve web açıkken:
 CB_ROOT=/tmp/cb-test CB_WEB=http://127.0.0.1:5180 npm run test:browser
@@ -60,5 +76,5 @@ npm run test:parity   # repodaki cerenbuilds-split-reel.skill ile karşılaştı
 `test:parity`, skill'in orijinal `scene.html`'i ile bu renderer'ın aynı kareleri piksel piksel aynı çizdiğini doğrular. Orijinalde sahneler `globalAlpha`'yı geri almıyordu ve crossfade sırasında arka plan ile birleşim gölgesi soluk çiziliyordu. Burada bu hata bilinçli olarak düzeltildi; test bu farkı hesaba katar.
 
 ## Sonraki aşamalar
-- **A2:** sol panelde fikir notları ve ilham linkleri (yt-dlp, keyframe, transkript, Claude analizi). Konuşmalı videolarda faster-whisper ile caption hizalama.
-- **A3:** ses efektleri izi, açıklama ve hashtag metni, şablon kütüphanesi.
+- **A2:** konuşmalı videolarda faster-whisper ile transkript ve caption hizalama (link analizi şimdilik yalnızca altyazısı olan videolarda konuşmayı okur).
+- **A3:** açıklama ve hashtag metni, şablon kütüphanesi.
