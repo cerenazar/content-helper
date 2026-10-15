@@ -31,7 +31,8 @@ export async function listProjects() {
   await fs.mkdir(ROOT, { recursive: true });
   const out: { slug: string; title: string; kind: string; updatedAt: number }[] = [];
   for (const d of await fs.readdir(ROOT, { withFileTypes: true })) {
-    if (!d.isDirectory()) continue;
+    // .inspiration, .research gibi gizli klasörler proje değil.
+    if (!d.isDirectory() || d.name.startsWith('.')) continue;
     const f = files(d.name);
     try {
       const raw = JSON.parse(await fs.readFile(f.project, 'utf8'));
@@ -49,7 +50,8 @@ export async function listSeries() {
   await fs.mkdir(ROOT, { recursive: true });
   const out: { slug: string; series: string; category: string; number: number }[] = [];
   for (const d of await fs.readdir(ROOT, { withFileTypes: true })) {
-    if (!d.isDirectory()) continue;
+    // .inspiration, .research gibi gizli klasörler proje değil.
+    if (!d.isDirectory() || d.name.startsWith('.')) continue;
     try {
       const raw = JSON.parse(await fs.readFile(files(d.name).project, 'utf8'));
       const pk = raw?.kind === 'carousel' && raw.style === 'picks' ? raw.picks : null;

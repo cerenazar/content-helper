@@ -4,13 +4,15 @@ import fs from 'node:fs/promises';
 import Fastify from 'fastify';
 import type { Clip } from '@cb/schema';
 import { PORT, FONTS_DIR, files, ROOT } from './paths';
-import { subscribe } from './events';
+import { subscribe, HUB } from './events';
 import { listProjects, listSeries, createProject, readProject, writeProject, snapshot, listHistory, restoreSnapshot, watchProject, writeClaudeMd } from './projects';
 import { makeClip, ensureProxy, proxyStatus, proxyPath, keyframeSheet, sheetDir, waveform, sendFile, pickFiles } from './media';
 import { exportReel, renderBundle, RENDER_HTML } from './export';
 import { askClaude, chatHistory, resetChat, stopClaude, isRunning } from './claude';
 import { run } from './ffmpeg';
-import { readIdeas, writeIdeas } from './ideas';
+import { readIdeas, writeIdeas, inspirationDir } from './ideas';
+import { analyzeIdea } from './inspire';
+import { readResearch, saveNiche, startResearch, stopRun, deleteRun } from './research';
 
 const app = Fastify({ logger: { level: 'warn' }, bodyLimit: 50 * 1024 * 1024 });
 
@@ -42,6 +44,21 @@ app.get('/api/series', async () => ({ series: await listSeries() }));
 // ---- Fikirler ----
 app.get('/api/ideas', async () => ({ ideas: await readIdeas() }));
 app.put<{ Body: { ideas: unknown } }>('/api/ideas', async (req) => ({ ideas: await writeIdeas(req.body?.ideas) }));
+app.post<{ Params: { id: string } }>('/api/ideas/:id/analyze', async (req) => ({ analysis: await analyzeIdea(req.params.id) }));
+app.get<{ Params: { id: string; file: string } }>('/api/inspiration/:id/:file', (req, reply) => {
+  if (!/^frame-\d{2}\.jpg$/.test(req.params.file)) return reply.code(400).send();
+  return sendFile(req, reply, path.join(inspirationDir(req.params.id), req.params.file), 'image/jpeg');
+});
+
+// ---- Araştır ----
+app.get('/api/research', async () => readResearch());
+app.put<{ Body: { niche: unknown } }>('/api/research/niche', async (req) => saveNiche(req.body?.niche));
+app.post<{ Body: { kind?: unknown; prompt?: unknown } }>('/api/research', async (req) => ({ run: await startResearch(req.body ?? {}) }));
+app.post<{ Params: { id: string } }>('/api/research/:id/stop', async (req) => stopRun(req.params.id));
+app.delete<{ Params: { id: string } }>('/api/research/:id', async (req) => deleteRun(req.params.id));
+
+/** Ana sayfa olayları: analiz ve araştırma ilerlemesi. */
+app.get('/api/events', (_req, reply) => subscribe(HUB, reply));
 
 app.get<{ Params: P }>('/api/projects/:slug', async (req) => {
   watchProject(req.params.slug);

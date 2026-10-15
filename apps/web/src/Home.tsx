@@ -1,33 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { newId } from '@cb/schema';
-import { api, type Idea, type ProjectSummary } from './api';
+import { api, hubEvents, type Analysis, type Idea, type ProjectSummary } from './api';
 import { thumbnail } from './thumbs';
-import { House, Folder, Bulb, LinkIcon, Trash, Plus } from './icons';
+import { House, Folder, Bulb, LinkIcon, Trash, Plus, Search, Sparkle } from './icons';
+import { Markdown } from './Markdown';
+import { Research } from './Research';
+import { ago, host, count } from './util';
 
-export type Section = 'home' | 'projects' | 'ideas';
+export type Section = 'home' | 'projects' | 'ideas' | 'research';
 type Kind = 'reel' | 'carousel';
 
-const rtf = new Intl.RelativeTimeFormat('tr', { numeric: 'auto' });
-function ago(ms: number) {
-  const s = (ms - Date.now()) / 1000;
-  if (Math.abs(s) < 60) return 'az önce';
-  if (Math.abs(s) < 3600) return rtf.format(Math.round(s / 60), 'minute');
-  if (Math.abs(s) < 86400) return rtf.format(Math.round(s / 3600), 'hour');
-  if (Math.abs(s) < 86400 * 30) return rtf.format(Math.round(s / 86400), 'day');
-  if (Math.abs(s) < 86400 * 365) return rtf.format(Math.round(s / (86400 * 30)), 'month');
-  return rtf.format(Math.round(s / (86400 * 365)), 'year');
-}
-
-const host = (url: string) => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
-};
-
 /** Bir fikirden proje adı: ilk satır, yoksa linkin sitesi. */
-const ideaTitle = (i: Idea) => i.text.split('\n')[0].trim().slice(0, 60) || (i.url ? 'İlham: ' + host(i.url) : 'Yeni proje');
+const ideaTitle = (i: Idea) =>
+  i.text.split('\n')[0].trim().slice(0, 60) || (i.analysis?.meta?.title ? 'İlham: ' + i.analysis.meta.title.slice(0, 52) : i.url ? 'İlham: ' + host(i.url) : 'Yeni proje');
+
+/** Analiz notundan panel Claude'una giden ilk mesaj. */
+function planMessage(i: Idea): string {
+  const a = i.analysis!;
+  return [
+    'Aşağıdaki ilham notuna göre bu proje için bir reel planı çıkar.',
+    "Önce planı kısaca yaz: hook (ilk 3 sn), sahne sahne akış (üstteki pixel-art sahnede ne olacak, alttaki videoda ne çekmem gerekiyor), 3 kelimelik caption'lar.",
+    "Sonra caption'ları ve sahneleri bu projeye taslak olarak ekle. Videoyu ben çekeceğim, klip ekleme.",
+    '',
+    `Kaynak video: ${i.url}${a.meta?.title ? ` (${a.meta.title}${a.meta.uploader ? ', ' + a.meta.uploader : ''})` : ''}`,
+    i.text.trim() ? `Benim notum: ${i.text.trim()}` : '',
+    '',
+    '<ilham-notu>',
+    a.note,
+    '</ilham-notu>',
+  ]
+    .filter((l, k, arr) => l !== '' || arr[k - 1] !== '')
+    .join('\n');
+}
 
 export function Home({ section }: { section: Section }) {
   const [list, setList] = useState<ProjectSummary[] | null>(null);
@@ -35,6 +39,15 @@ export function Home({ section }: { section: Section }) {
   const [root, setRoot] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Analiz ilerlemesi sunucudan akar.
+  useEffect(
+    () =>
+      hubEvents((e) => {
+        if (e.type === 'analysis') setIdeas((l) => l && l.map((i) => (i.id === e.id ? { ...i, analysis: e.analysis } : i)));
+      }),
+    [],
+  );
 
   useEffect(() => {
     api
@@ -78,12 +91,40 @@ export function Home({ section }: { section: Section }) {
     const url = /^https?:\/\/\S+$/.test(t) ? t : null;
     void saveIdeas([{ id: newId('idea'), text: url ? '' : t, url, createdAt: Date.now(), project: null }, ...(ideas ?? [])]);
   };
+
+  async function analyze(i: Idea) {
+    setError(null);
+    try {
+      const { analysis } = await api.analyze(i.id);
+      setIdeas((l) => l && l.map((x) => (x.id === i.id ? { ...x, analysis } : x)));
+    } catch (e) {
+      setError('Analiz başlatılamadı: ' + (e as Error).message);
+    }
+  }
+
+  /** Analizden reel: proje açılır, fikre bağlanır, panel Claude'una plan isteği gider, editöre geçilir. */
+  async function planFromAnalysis(i: Idea) {
+    setBusy(true);
+    setError(null);
+    try {
+      const { slug } = await api.create(ideaTitle(i), 'reel');
+      const fresh = (await api.ideas()).ideas;
+      await api.saveIdeas(fresh.map((x) => (x.id === i.id ? { ...x, project: slug } : x)));
+      await api.ask(slug, planMessage(i));
+      location.hash = `#/p/${slug}`;
+    } catch (e) {
+      setError('Reel planı başlatılamadı: ' + (e as Error).message);
+      setBusy(false);
+    }
+  }
   const ideaProps = {
     ideas,
     busy,
     onAdd: addIdea,
     onDelete: (id: string) => void saveIdeas((ideas ?? []).filter((i) => i.id !== id)),
     onCreate: (kind: Kind, i: Idea) => void create(kind, ideaTitle(i), i),
+    onAnalyze: (i: Idea) => void analyze(i),
+    onPlan: (i: Idea) => void planFromAnalysis(i),
   };
 
   return (
@@ -100,6 +141,9 @@ export function Home({ section }: { section: Section }) {
         </NavLink>
         <NavLink href="#/ideas" current={section === 'ideas'} icon={<Bulb size={17} />} count={ideas?.length}>
           Fikirlerim
+        </NavLink>
+        <NavLink href="#/research" current={section === 'research'} icon={<Search size={17} />}>
+          Araştır
         </NavLink>
         <span className="hub-spacer" />
         {root && <p className="hub-root">Projeler: {root}</p>}
@@ -139,9 +183,20 @@ export function Home({ section }: { section: Section }) {
             <header className="hub-sec-h">
               <h1 id="ideas-h">Fikirlerim</h1>
             </header>
-            <p className="hub-lede">Aklına gelenleri ve beğendiğin videoların linklerini buraya kaydet. Hazır olduğunda tek tıkla reel ya da carousel'e çevir.</p>
+            <p className="hub-lede">
+              Aklına gelenleri ve beğendiğin videoların linklerini buraya kaydet. Linkleri Claude'a analiz ettir, hazır olduğunda tek tıkla reel ya da carousel'e çevir.
+            </p>
             <Ideas {...ideaProps} />
           </section>
+        )}
+
+        {section === 'research' && (
+          <Research
+            busy={busy}
+            ideas={ideas}
+            onAddIdea={(text, url) => void saveIdeas([{ id: newId('idea'), text, url, createdAt: Date.now(), project: null }, ...(ideas ?? [])])}
+            onCreateReel={(title) => void create('reel', title)}
+          />
         )}
       </main>
     </div>
@@ -283,6 +338,8 @@ function Ideas({
   onAdd,
   onDelete,
   onCreate,
+  onAnalyze,
+  onPlan,
 }: {
   ideas: Idea[] | null;
   busy: boolean;
@@ -290,6 +347,8 @@ function Ideas({
   onAdd: (t: string) => void;
   onDelete: (id: string) => void;
   onCreate: (k: Kind, i: Idea) => void;
+  onAnalyze: (i: Idea) => void;
+  onPlan: (i: Idea) => void;
 }) {
   const [draft, setDraft] = useState('');
   const shown = ideas && (limit ? ideas.slice(0, limit) : ideas);
@@ -316,43 +375,122 @@ function Ideas({
       {shown && shown.length === 0 && <p className="empty">Henüz fikir yok. Aklına geleni ya da beğendiğin bir videonun linkini yukarıya yaz.</p>}
       {shown && shown.length > 0 && (
         <ul className="ilist">
-          {shown.map((i) => (
-            <li key={i.id} className="idea">
-              <span className={'idea-ic' + (i.url ? ' link' : '')} aria-hidden>
-                {i.url ? <LinkIcon size={15} /> : <Bulb size={15} />}
-              </span>
-              <div className="idea-body">
-                {i.text && <p className="idea-text">{i.text}</p>}
-                {i.url && (
-                  <a className="idea-url" href={i.url} target="_blank" rel="noreferrer">
-                    {host(i.url)}
-                  </a>
-                )}
-                <span className="idea-when">{ago(i.createdAt)}</span>
-              </div>
-              <div className="idea-acts">
-                {i.project ? (
-                  <a className="btn small" href={`#/p/${i.project}`}>
-                    Projeyi aç
-                  </a>
-                ) : (
-                  <>
-                    <button className="btn small" disabled={busy} onClick={() => onCreate('reel', i)}>
-                      Reel yap
+          {shown.map((i) => {
+            const a = i.analysis;
+            const canAnalyze = !!i.url && a?.status !== 'running';
+            return (
+              <li key={i.id} className="idea">
+                <span className={'idea-ic' + (i.url ? ' link' : '')} aria-hidden>
+                  {i.url ? <LinkIcon size={15} /> : <Bulb size={15} />}
+                </span>
+                <div className="idea-body">
+                  {i.text && <p className="idea-text">{i.text}</p>}
+                  {!i.text && a?.meta?.title && <p className="idea-text">{a.meta.title}</p>}
+                  {i.url && (
+                    <a className="idea-url" href={i.url} target="_blank" rel="noreferrer">
+                      {host(i.url)}
+                    </a>
+                  )}
+                  <span className="idea-when">{ago(i.createdAt)}</span>
+                </div>
+                <div className="idea-acts">
+                  {canAnalyze && !a && (
+                    <button className="btn small ana-btn" onClick={() => onAnalyze(i)}>
+                      <Sparkle size={14} /> Analiz et
                     </button>
-                    <button className="btn small" disabled={busy} onClick={() => onCreate('carousel', i)}>
-                      Carousel yap
-                    </button>
-                  </>
-                )}
-                <button className="btn small ghost icon danger" aria-label="Fikri sil" title="Fikri sil" onClick={() => onDelete(i.id)}>
-                  <Trash size={14} />
-                </button>
-              </div>
-            </li>
-          ))}
+                  )}
+                  {i.project ? (
+                    <a className="btn small" href={`#/p/${i.project}`}>
+                      Projeyi aç
+                    </a>
+                  ) : (
+                    <>
+                      <button className="btn small" disabled={busy} onClick={() => onCreate('reel', i)}>
+                        Reel yap
+                      </button>
+                      <button className="btn small" disabled={busy} onClick={() => onCreate('carousel', i)}>
+                        Carousel yap
+                      </button>
+                    </>
+                  )}
+                  <button className="btn small ghost icon danger" aria-label="Fikri sil" title="Fikri sil" onClick={() => onDelete(i.id)}>
+                    <Trash size={14} />
+                  </button>
+                </div>
+                {a && <AnalysisView idea={i} a={a} compact={!!limit} busy={busy} onAnalyze={() => onAnalyze(i)} onPlan={() => onPlan(i)} />}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
+  );
+}
+
+function AnalysisView({ idea, a, compact, busy, onAnalyze, onPlan }: { idea: Idea; a: Analysis; compact: boolean; busy: boolean; onAnalyze: () => void; onPlan: () => void }) {
+  if (a.status === 'running')
+    return (
+      <div className="ana running" role="status" aria-live="polite">
+        <span className="ana-pulse" aria-hidden />
+        <span>{a.step || 'Analiz ediliyor…'}</span>
+      </div>
+    );
+  if (a.status === 'error')
+    return (
+      <div className="ana failed">
+        <p className="err" role="alert">
+          {a.error}
+        </p>
+        <button className="btn small" onClick={onAnalyze}>
+          Tekrar dene
+        </button>
+      </div>
+    );
+  const m = a.meta;
+  const stats = [m?.uploader, m?.duration ? Math.round(m.duration) + ' sn' : null, m?.viewCount != null ? count(m.viewCount) + ' izlenme' : null, m?.likeCount != null ? count(m.likeCount) + ' beğeni' : null].filter(Boolean);
+  return (
+    <AnaDetails defaultOpen={!compact} className="ana done">
+      <summary>
+        <Sparkle size={14} />
+        <span className="ana-sum-t">
+          İlham notu
+        </span>
+        {stats.length > 0 && <span className="ana-stats">{stats.join(' · ')}</span>}
+      </summary>
+      {a.frames.length > 0 && (
+        <ol className="ana-frames" aria-label="Videodan eşit aralıklı kareler">
+          {a.frames.map((f, k) => (
+            <li key={f}>
+              <img src={api.frameUrl(idea.id, f)} alt={`Kare ${k + 1}/${a.frames.length}`} loading="lazy" />
+            </li>
+          ))}
+        </ol>
+      )}
+      {!a.hasSubtitles && <p className="hint ana-nosub">Altyazı yok, analiz görüntü ve açıklamadan yapıldı.</p>}
+      <Markdown text={a.note} shift={1} className="md ana-note" />
+      <div className="ana-acts">
+        {!idea.project && (
+          <button className="btn claude" disabled={busy} onClick={onPlan}>
+            Bu analizden reel planı çıkar
+          </button>
+        )}
+        <button className="btn small ghost" onClick={onAnalyze}>
+          Yeniden analiz et
+        </button>
+      </div>
+    </AnaDetails>
+  );
+}
+
+/** <details>: varsayılan açıklık yalnızca ilk çizimde uygulanır, sonra kullanıcının seçimi korunur. */
+function AnaDetails({ defaultOpen, className, children }: { defaultOpen: boolean; className: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.open = defaultOpen;
+  }, []);
+  return (
+    <details ref={ref} className={className}>
+      {children}
+    </details>
   );
 }
