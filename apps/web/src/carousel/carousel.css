@@ -98,12 +98,13 @@
 /* ---- Alt çubuk ---- */
 .zoom { display: flex; align-items: center; gap: 4px; margin-right: 8px; }
 .slide-pos { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.overflow-note { gap: 6px; white-space: nowrap; }
 .slide-pos b { color: var(--text); font-weight: 600; }
 .select.small { min-height: 26px; padding: 2px 6px; font-size: 12px; width: auto; }
 .export-status { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12px; }
 .export-status.err { color: var(--err); }
 .export-status .bar { width: 90px; height: 4px; border-radius: 4px; background: var(--bay-3); overflow: hidden; }
-.export-status .bar i { display: block; height: 100%; background: var(--sel); transition: width 200ms var(--ease); }
+.export-status .bar i { display: block; height: 100%; background: var(--sel); transition: width 200ms linear; }
 
 /* ---- Slayt şeridi ---- */
 .strip { display: flex; gap: 10px; padding: 10px 12px; overflow-x: auto; align-items: center; }
@@ -119,7 +120,7 @@
 .strip .thumb .thumb-vid { position: absolute; right: 4px; bottom: 4px; background: rgba(31, 26, 23, 0.8); color: #fff; padding: 2px 3px; border-radius: 3px; display: grid; }
 .thumb-more {
   position: absolute; top: 4px; right: 4px; width: 26px; height: 22px; display: grid; place-items: center; border-radius: 4px;
-  border: 0; background: rgba(31, 26, 23, 0.82); color: #fff; cursor: pointer; opacity: 0; transition: opacity 120ms var(--ease);
+  border: 0; background: rgba(31, 26, 23, 0.82); color: #fff; cursor: pointer; opacity: 0; transition: opacity var(--dur-quick) ease-out;
 }
 .thumb-wrap:hover .thumb-more, .thumb-more:focus-visible, .thumb-more[aria-expanded='true'], .thumb-wrap:has(.thumb[aria-selected='true']) .thumb-more { opacity: 1; }
 .strip .add-tile { flex: none; width: 96px; aspect-ratio: 4/5; border-radius: 4px; border: 1.5px dashed var(--rule); background: transparent; color: var(--text-2); display: grid; place-content: center; justify-items: center; gap: 4px; cursor: pointer; font-size: 12px; }

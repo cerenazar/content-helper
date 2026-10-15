@@ -79,6 +79,7 @@ export function ClaudePanel({ claude }: { slug: string; claude: ClaudeState }) {
   const time = useStore((s) => s.time);
   const [text, setText] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const ctx = describe(project, sel, time);
 
   useEffect(() => {
@@ -102,7 +103,13 @@ export function ClaudePanel({ claude }: { slug: string; claude: ClaudeState }) {
             <p style={{ margin: 0 }}>Claude bu projeyi seninle aynı anda düzenler. Bir şey seçip "bunu kısalt" diyebilirsin. Her değişiklik geri alınabilir.</p>
             <div className="sugs">
               {SUGGEST[project.kind].map((s) => (
-                <button key={s} onClick={() => setText(s)}>
+                <button
+                  key={s}
+                  onClick={() => {
+                    setText(s);
+                    inputRef.current?.focus(); // öneri kutuya gelir, ⌘↩ ile gönderilir ya da düzenlenir
+                  }}
+                >
                   {s}
                 </button>
               ))}
@@ -170,6 +177,7 @@ export function ClaudePanel({ claude }: { slug: string; claude: ClaudeState }) {
           )}
         </div>
         <textarea
+          ref={inputRef}
           className="textarea"
           rows={3}
           placeholder="Claude'a yaz… (⌘↩ gönderir)"

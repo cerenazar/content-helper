@@ -221,7 +221,7 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
       useStore.getState().setJob(job);
       setExportJob(job.id);
     } catch (e) {
-      setExportErr('Kaydedilemedi: ' + (e as Error).message);
+      setExportErr('Dışa aktarılamadı: ' + (e as Error).message);
     }
   }
 
@@ -263,11 +263,11 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
             ) : null}
           </span>
         )}
-        <button className="btn" onClick={() => void exportSlides('jpg')} disabled={claudeRunning || exporting} title={nVideoSlides ? 'Videolu slaytlar MP4 olarak kaydedilir' : undefined}>
-          JPEG kaydet
+        <button className="btn fmt-alt" onClick={() => void exportSlides('jpg')} disabled={claudeRunning || exporting} title={nVideoSlides ? 'Videolu slaytlar MP4 olarak çıkar' : undefined}>
+          JPEG olarak dışa aktar
         </button>
-        <button className="btn primary" onClick={() => void exportSlides('png')} disabled={claudeRunning || exporting} title={nVideoSlides ? 'Videolu slaytlar MP4 olarak kaydedilir' : undefined}>
-          PNG kaydet
+        <button className="btn primary" onClick={() => void exportSlides('png')} disabled={claudeRunning || exporting} title={nVideoSlides ? 'Videolu slaytlar MP4 olarak çıkar' : undefined}>
+          PNG olarak dışa aktar
         </button>
       </TopBar>
 
@@ -362,8 +362,8 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
             {vids.length ? <span className="hint"> · video (MP4)</span> : null}
           </span>
           {overflow.size > 0 && (
-            <span className="warn row" style={{ gap: 6 }}>
-              <Alert size={14} /> {overflow.size} metin kutusundan taşıyor
+            <span className="warn row overflow-note" role="status" title="Sarı kesikli çerçeveli kutuyu büyüt ya da metni kısalt">
+              <Alert size={14} /> {overflow.size} metin taşıyor
             </span>
           )}
           <div className="stage-acts">

@@ -81,8 +81,8 @@ export function TopBar({ slug, children }: { slug: string; children?: React.Reac
   const label = claudeRunning ? 'Claude düzenliyor' : saveState === 'saved' ? 'Kaydedildi' : saveState === 'error' ? 'Kaydedilemedi: ' + saveError : 'Kaydediliyor';
   return (
     <header className="topbar">
-      <a className="back row" href="#/" aria-label="Projelere dön" style={{ gap: 6 }}>
-        <ArrowLeft size={15} /> Projeler
+      <a className="back row" href="#/" aria-label="Ana sayfaya dön" title="Ana sayfaya dön" style={{ gap: 6 }}>
+        <ArrowLeft size={15} /> Ana sayfa
       </a>
       <span className="ptitle">{title}</span>
       <span className={'save' + (saveState === 'error' ? ' error' : '')} role="status">
