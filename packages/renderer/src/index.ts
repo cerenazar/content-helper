@@ -6,3 +6,4 @@ export * from './templates';
 export * from './crop';
 export * from './fonts';
 export * from './edit';
+export * from './editing';

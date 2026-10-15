@@ -101,6 +101,15 @@ export const SlideElement = z.object({
   fill: HEX.nullable().default(null),
   /** Metin kalınlığı (picks). null: başlık 800, metin 500, hap 700. */
   weight: z.number().int().min(100).max(900).nullable().default(null),
+  /** Gizli öğe çizilmez (export'ta da yok). */
+  hidden: z.boolean().default(false),
+  /** Kilitli öğe sürüklenemez, boyutlandırılamaz, silinemez. */
+  locked: z.boolean().default(false),
+  /**
+   * window: pencere içinde oynayan video, kaynak dosyanın mutlak yolu (kopyalanmaz, reel klipleri gibi).
+   * Verilirse src yerine bu gösterilir; export'ta slayt 4:5 MP4 olur.
+   */
+  video: z.string().nullable().default(null),
 });
 
 export const Slide = z.object({
@@ -152,6 +161,8 @@ export type Accent = (typeof ACCENTS)[number];
 export const REEL = { W: 1080, H: 1920, TOP: 960, FPS: 30 } as const;
 export const SLIDE = { W: 1080, H: 1350 } as const;
 export const IG_LIMIT_BYTES = 30 * 1024 * 1024;
+/** Instagram carousel videosu en fazla 60 sn. */
+export const CAROUSEL_VIDEO_MAX_SEC = 60;
 
 /** Picks stilinin varsayılan vurgu rengi (kapaktaki altın). */
 export const PICKS_GOLD = '#C9A35B';

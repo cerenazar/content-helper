@@ -3,6 +3,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { newId, type Clip } from '@cb/schema';
 import { files, SFX_DIR } from './paths';
@@ -16,6 +17,17 @@ export async function makeClip(file: string): Promise<Clip> {
   if (!existsSync(abs)) throw Object.assign(new Error('Dosya bulunamadı: ' + abs), { statusCode: 404 });
   if (!VIDEO_EXT.test(abs)) throw Object.assign(new Error('Video dosyası değil: ' + path.basename(abs)), { statusCode: 422 });
   return { id: newId('clip'), path: abs, name: path.basename(abs), probe: await probe(abs) };
+}
+
+/**
+ * Carousel penceresindeki video: kaynak yol projede saklanır (kopyalanmaz). Önizleme proxy'si için
+ * yoldan türetilen sabit bir id kullanılır, böylece aynı video için proxy bir kez üretilir.
+ */
+export const videoId = (abs: string) => 'v_' + crypto.createHash('sha1').update(abs).digest('hex').slice(0, 12);
+
+export async function videoClip(file: string): Promise<Clip> {
+  const clip = await makeClip(file);
+  return { ...clip, id: videoId(clip.path) };
 }
 
 const proxyPath = (slug: string, clipId: string) => path.join(files(slug).cache, 'proxy', clipId + '.mp4');

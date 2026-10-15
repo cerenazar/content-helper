@@ -1,483 +1,322 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  createCarouselRenderer,
-  ensureFonts,
-  slideEl as el,
-  picksCoverSlide,
-  picksPickSlide,
-  type ImageSource,
-} from "@cb/renderer";
-import {
-  SLIDE,
-  newId,
-  WORLDS,
-  ACCENTS,
-  PICKS_GOLD,
-  nextSeriesNumber,
-  type CarouselProject,
-  type Slide,
-  type SlideElement,
-} from "@cb/schema";
-import { useStore } from "../store";
-import { api } from "../api";
-import { TopBar } from "../Editor";
-import { Header } from "../reel/Inspector";
-import { Plus, Copy, ChevronLeft, ChevronRight, Trash, Alert } from "../icons";
+import { useEffect, useRef, useState } from 'react';
+import { slideEl as el, picksCoverSlide, picksPickSlide, moveItem, reorderZ, pasteOffset, slideVideos, type ImageSource, type ZOp } from '@cb/renderer';
+import { SLIDE, newId, type CarouselProject, type Slide, type SlideElement } from '@cb/schema';
+import { useStore, selectedElementIds } from '../store';
+import { api } from '../api';
+import { TopBar } from '../Editor';
+import { ChevronLeft, ChevronRight, Alert, Copy, Trash } from '../icons';
+import { ZoomIn, ZoomOut } from './icons';
+import { useImages, useVideos } from './media';
+import { Stage, TEXT_TYPES, type Zoom } from './Stage';
+import { Layers } from './Layers';
+import { SlideStrip } from './SlideStrip';
+import { ElementInspector, MultiInspector, CarouselInspector, pickImage, pickVideo } from './Inspectors';
+import './carousel.css';
 
-const ACCENT_TR: Record<string, string> = {
-  orange: "turuncu",
-  sage: "adaçayı",
-  lav: "lavanta",
-  sky: "gök",
-  gold: "altın",
-  ink: "mürekkep",
-};
+/** Uygulama içi pano (⌘C/⌘V): öğeler slaytlar arasında taşınabilir. */
+const clipboard: { els: SlideElement[]; from: string | null; pastes: number } = { els: [], from: null, pastes: 0 };
 
-/** Picks vurgu renkleri: kapak altını ve sık kullanılan marka renkleri. */
-const PICKS_ACCENTS: [string, string][] = [
-  [PICKS_GOLD, "Altın"],
-  ["#E0168F", "Magenta"],
-  ["#D2404B", "Kırmızı"],
-  ["#3B82F6", "Mavi"],
-  ["#3FB950", "Yeşil"],
-];
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2];
 
-/** Proje klasörüne kopyalanan görselin yolunu döndürür (seçim iptal edilirse null). */
-async function pickImage(slug: string): Promise<string | null> {
-  const { paths } = await api.pick("image");
-  if (!paths.length) return null;
-  const { srcs } = await api.addImages(slug, paths);
-  return srcs[0] ?? null;
-}
+const cloneEl = (e: SlideElement, d: number): SlideElement => ({ ...e, id: newId('el'), x: e.x + d, y: e.y + d, locked: false });
 
-/** Görselleri bir kez yükler, yüklenince yeniden çizim tetikler. */
-function useImages(slug: string, p: CarouselProject) {
-  const [, bump] = useState(0);
-  const cache = useRef(new Map<string, ImageSource>());
-  useEffect(() => {
-    const srcs = p.slides.flatMap((s) => [
-      s.bg,
-      ...s.elements
-        .filter((e) => e.type === "image" || e.type === "window")
-        .map((e) => e.src),
-    ]);
-    for (const src of srcs)
-      if (src && !cache.current.has(src)) {
-        const img = new Image();
-        img.onload = () => {
-          cache.current.set(src, img);
-          bump((n) => n + 1);
-        };
-        img.src = api.mediaUrl(slug, src);
-      }
-  }, [p, slug]);
-  return cache.current;
-}
-
-let fontsReady: Promise<void> | null = null;
-const fonts = () => (fontsReady ??= ensureFonts());
-
-function SlideCanvas({
-  project,
-  index,
-  images,
-  className,
-  onOverflow,
-}: {
-  project: CarouselProject;
-  index: number;
-  images: Map<string, ImageSource>;
-  className?: string;
-  onOverflow?: (m: Map<string, number>) => void;
-}) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => void fonts().then(() => setReady(true)), []);
-  useEffect(() => {
-    const g = ref.current!.getContext("2d")!;
-    const over = createCarouselRenderer(g).render(project, index, images);
-    if (ready) onOverflow?.(over);
-  });
-  return (
-    <canvas
-      ref={ref}
-      width={SLIDE.W}
-      height={SLIDE.H}
-      className={className}
-      data-ready={ready}
-    />
-  );
-}
-
-export function CarouselEditor({
-  slug,
-  claudePanel,
-  claudeRunning,
-}: {
-  slug: string;
-  claudePanel: React.ReactNode;
-  claudeRunning: boolean;
-}) {
+export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: string; claudePanel: React.ReactNode; claudeRunning: boolean }) {
   const project = useStore((s) => s.project) as CarouselProject;
   const sel = useStore((s) => s.selection);
   const flash = useStore((s) => s.flash);
+  const jobs = useStore((s) => s.jobs);
   const { updateCarousel, select } = useStore.getState();
-  const [tab, setTab] = useState<"edit" | "claude">("edit");
-  const [exporting, setExporting] = useState<string | null>(null);
+  const [tab, setTab] = useState<'edit' | 'claude'>('edit');
+  const [exportJob, setExportJob] = useState<string | null>(null);
+  const [exportErr, setExportErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<Zoom>('fit');
+  const [playing, setPlaying] = useState(false);
   const images = useImages(slug, project);
+  const videos = useVideos(slug, project);
   const [overflow, setOverflowState] = useState<Map<string, number>>(new Map());
   const setOverflow = (m: Map<string, number>) => {
     const key = (x: Map<string, number>) => JSON.stringify([...x]);
     setOverflowState((prev) => (key(prev) === key(m) ? prev : m));
   };
   const stageRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const slideId =
-    sel?.kind === "slide"
-      ? sel.id
-      : sel?.kind === "element"
-        ? sel.slide
-        : project.slides[0].id;
-  const index = Math.max(
-    0,
-    project.slides.findIndex((s) => s.id === slideId),
-  );
+  const slideId = sel?.kind === 'slide' ? sel.id : sel?.kind === 'element' ? sel.slide : project.slides[0].id;
+  const index = Math.max(0, project.slides.findIndex((s) => s.id === slideId));
   const slide = project.slides[index];
-  const picks = project.style === "picks";
+  const picks = project.style === 'picks';
   const margin = picks ? 76 : 72;
-  const selEl =
-    sel?.kind === "element"
-      ? slide.elements.find((e) => e.id === sel.id)
-      : undefined;
+  const selIds = selectedElementIds(sel).filter((id) => slide.elements.some((e) => e.id === id));
+  const selEls = slide.elements.filter((e) => selIds.includes(e.id));
+  const primary = sel?.kind === 'element' ? slide.elements.find((e) => e.id === sel.id) : undefined;
+  const vids = slideVideos(project, index);
+
+  // Görseller + oynatılan videoların son karesi: aynı renderer'a görsel gibi verilir.
+  const media = new Map<string, ImageSource>([...images, ...videos.frames]);
 
   useEffect(() => {
-    if (claudeRunning) setTab("claude");
+    if (claudeRunning) setTab('claude');
   }, [claudeRunning]);
 
-  const setSlide = (fn: (s: Slide) => Slide, key?: string) =>
-    updateCarousel(
-      (p) => ({
-        ...p,
-        slides: p.slides.map((s) => (s.id === slide.id ? fn(s) : s)),
-      }),
-      key,
-    );
-  const setEl = (id: string, patch: Partial<SlideElement>, key?: string) =>
-    setSlide(
-      (s) => ({
-        ...s,
-        elements: s.elements.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-      }),
-      key,
-    );
+  // Slayt değişince düzenleme biter, videolar durur.
+  useEffect(() => {
+    setEditing(null);
+    setPlaying(false);
+  }, [slide.id]);
 
-  // Sürükle / boyutlandır (canvas pikseline çevrilmiş)
-  const startDrag = (
-    e: React.PointerEvent,
-    target: SlideElement,
-    mode: "move" | "resize",
-  ) => {
-    e.stopPropagation();
-    e.preventDefault();
-    select({ kind: "element", slide: slide.id, id: target.id });
-    const scale = SLIDE.W / stageRef.current!.getBoundingClientRect().width;
-    const x0 = e.clientX,
-      y0 = e.clientY;
-    const node = e.currentTarget as HTMLElement;
-    node.setPointerCapture(e.pointerId);
-    const snap = (v: number) =>
-      Math.abs(v - margin) < 12 ? margin : Math.round(v);
-    const move = (ev: PointerEvent) => {
-      const dx = (ev.clientX - x0) * scale,
-        dy = (ev.clientY - y0) * scale;
-      if (mode === "move")
-        setEl(
-          target.id,
-          { x: snap(target.x + dx), y: Math.round(target.y + dy) },
-          "move-" + target.id,
-        );
-      else
-        setEl(
-          target.id,
-          {
-            w: Math.max(40, Math.round(target.w + dx)),
-            h: Math.max(30, Math.round(target.h + dy)),
-          },
-          "rz-" + target.id,
-        );
+  // Oynat/durdur: yalnız bu slaydın videoları oynar (sessiz önizleme).
+  const vidKey = vids.map((v) => v.video).join('\n');
+  useEffect(() => {
+    for (const v of vids) {
+      const node = videos.element(v.video!);
+      if (!node) continue;
+      if (playing) void node.play().catch(() => setPlaying(false));
+      else node.pause();
+    }
+    return () => {
+      for (const v of vids) videos.element(v.video!)?.pause();
     };
-    const up = () => {
-      node.removeEventListener("pointermove", move);
-      node.removeEventListener("pointerup", up);
-    };
-    node.addEventListener("pointermove", move);
-    node.addEventListener("pointerup", up);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, vidKey, videos.frames.size]);
+
+  // ---- düzenleme işlemleri ----
+  const setSlide = (fn: (s: Slide) => Slide, key?: string) =>
+    updateCarousel((p) => ({ ...p, slides: p.slides.map((s) => (s.id === slide.id ? fn(s) : s)) }), key);
+  const setElements = (fn: (els: SlideElement[]) => SlideElement[], key?: string) => setSlide((s) => ({ ...s, elements: fn(s.elements) }), key);
+  const patchEls = (patches: Record<string, Partial<SlideElement>>, key?: string) =>
+    setElements((els) => els.map((e) => (patches[e.id] ? { ...e, ...patches[e.id] } : e)), key);
+  const setEl = (id: string, patch: Partial<SlideElement>, key?: string) => patchEls({ [id]: patch }, key);
+
+  const selectIds = (ids: string[], primaryId?: string) => {
+    if (!ids.length) return select({ kind: 'slide', id: slide.id });
+    const id = primaryId && ids.includes(primaryId) ? primaryId : ids[ids.length - 1];
+    select(ids.length === 1 ? { kind: 'element', slide: slide.id, id } : { kind: 'element', slide: slide.id, id, ids });
   };
 
-  // Klavye: seçili öğeyi oklarla it, Delete ile sil
+  const addEls = (els: SlideElement[]) => {
+    setElements((cur) => [...cur, ...els]);
+    selectIds(els.map((e) => e.id));
+  };
+  const addEl = (n: SlideElement) => addEls([n]);
+
+  const deleteSelected = () => {
+    const del = new Set(selEls.filter((e) => !e.locked).map((e) => e.id));
+    if (!del.size) return;
+    setElements((els) => els.filter((e) => !del.has(e.id)));
+    selectIds(selIds.filter((id) => !del.has(id)));
+  };
+  const zorder = (op: ZOp) => selIds.length && setElements((els) => reorderZ(els, selIds, op));
+
+  const insertSlide = (n: Slide, at = index + 1) => {
+    updateCarousel((p) => {
+      const sl = p.slides.slice();
+      sl.splice(at, 0, n);
+      return { ...p, slides: sl };
+    });
+    select({ kind: 'slide', id: n.id });
+  };
+  const blankSlide = (): Slide =>
+    picks
+      ? picksPickSlide(slide.accent)
+      : { id: newId('sl'), bg: null, accent: null, elements: [el({ type: 'title', text: 'Yeni slayt', size: 88, y: 300, h: 140 })] };
+  const strip = {
+    select: (i: number) => select({ kind: 'slide', id: project.slides[i].id }),
+    move: (from: number, to: number) => updateCarousel((p) => ({ ...p, slides: moveItem(p.slides, from, to) })),
+    duplicate: (i: number) => {
+      const s = project.slides[i];
+      insertSlide({ ...s, id: newId('sl'), elements: s.elements.map((e) => ({ ...e, id: newId('el') })) }, i + 1);
+    },
+    remove: (i: number) => {
+      if (project.slides.length <= 1) return;
+      const s = project.slides[i];
+      updateCarousel((p) => ({ ...p, slides: p.slides.filter((x) => x.id !== s.id) }));
+      select({ kind: 'slide', id: project.slides[i === 0 ? 1 : i - 1].id });
+    },
+    addAfter: (i: number) => insertSlide(blankSlide(), i + 1),
+  };
+
+  // ---- yakınlaştırma ----
+  const currentScale = () => (zoom === 'fit' ? (stageRef.current?.getBoundingClientRect().width ?? 540) / SLIDE.W : zoom);
+  const zoomBy = (dir: 1 | -1) => {
+    const s = currentScale();
+    const next = dir > 0 ? ZOOM_STEPS.find((z) => z > s + 0.01) : [...ZOOM_STEPS].reverse().find((z) => z < s - 0.01);
+    if (next) setZoom(next);
+  };
+
+  // ---- klavye ----
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (
-        (e.target as HTMLElement).closest(
-          "input, textarea, select, [contenteditable]",
-        )
-      )
+      const t = e.target as HTMLElement;
+      if (t.closest('input, textarea, select, [contenteditable], [role="menu"]')) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const k = e.key.toLowerCase();
+      // Yakınlaştırma
+      if (mod && (k === '=' || k === '+')) return void (e.preventDefault(), zoomBy(1));
+      if (mod && k === '-') return void (e.preventDefault(), zoomBy(-1));
+      if (mod && k === '0') return void (e.preventDefault(), setZoom('fit'));
+      if (mod && k === 'a') {
+        e.preventDefault();
+        return selectIds(slide.elements.filter((x) => !x.hidden).map((x) => x.id));
+      }
+      if (mod && k === 'v' && clipboard.els.length) {
+        e.preventDefault();
+        const same = clipboard.from === slide.id;
+        clipboard.pastes++;
+        const d = pasteOffset(same, clipboard.pastes);
+        return addEls(clipboard.els.map((x) => cloneEl(x, d)));
+      }
+      if (!selEls.length) return;
+      if (mod && (k === 'c' || k === 'x')) {
+        e.preventDefault();
+        clipboard.els = selEls.map((x) => ({ ...x }));
+        clipboard.from = slide.id;
+        clipboard.pastes = 0;
+        if (k === 'x') deleteSelected();
         return;
-      const st = useStore.getState();
-      const s = st.selection;
-      if (s?.kind !== "element") return;
+      }
+      if (mod && k === 'd') {
+        e.preventDefault();
+        return addEls(selEls.map((x) => cloneEl(x, pasteOffset(true, 1))));
+      }
+      if (mod && (e.code === 'BracketRight' || e.code === 'BracketLeft')) {
+        e.preventDefault();
+        return void zorder(e.code === 'BracketRight' ? (e.shiftKey ? 'front' : 'forward') : e.shiftKey ? 'back' : 'backward');
+      }
+      if (mod) return;
       const d = e.shiftKey ? 10 : 1;
-      const delta: Record<string, [number, number]> = {
-        ArrowLeft: [-d, 0],
-        ArrowRight: [d, 0],
-        ArrowUp: [0, -d],
-        ArrowDown: [0, d],
-      };
+      const delta: Record<string, [number, number]> = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] };
       if (delta[e.key]) {
         e.preventDefault();
-        const cur = slide.elements.find((x) => x.id === s.id);
-        if (cur)
-          setEl(
-            s.id,
-            { x: cur.x + delta[e.key][0], y: cur.y + delta[e.key][1] },
-            "nudge-" + s.id,
-          );
-      } else if (e.key === "Backspace" || e.key === "Delete") {
-        setSlide((sl) => ({
-          ...sl,
-          elements: sl.elements.filter((x) => x.id !== s.id),
-        }));
-        st.select({ kind: "slide", id: slide.id });
-      } else if (e.key === "Escape") st.select({ kind: "slide", id: slide.id });
+        const [dx, dy] = delta[e.key];
+        patchEls(Object.fromEntries(selEls.filter((x) => !x.locked).map((x) => [x.id, { x: x.x + dx, y: x.y + dy }])), 'nudge-' + selIds.join(','));
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        deleteSelected();
+      } else if (e.key === 'Escape') selectIds([]);
+      else if (e.key === 'Enter' && primary && selIds.length === 1 && TEXT_TYPES.includes(primary.type) && !primary.locked) {
+        e.preventDefault();
+        setEditing(primary.id);
+      }
     };
-    addEventListener("keydown", on);
-    return () => removeEventListener("keydown", on);
+    addEventListener('keydown', on);
+    return () => removeEventListener('keydown', on);
   });
 
-  async function exportSlides(fmt: "png" | "jpg") {
-    setExporting("Slaytlar hazırlanıyor…");
+  // ---- export (sunucuda aynı renderer; videolu slaytlar MP4) ----
+  const job = exportJob ? jobs[exportJob] : undefined;
+  const exporting = job?.status === 'running';
+  const revealed = useRef<string | null>(null);
+  useEffect(() => {
+    if (job?.status === 'done' && revealed.current !== job.id) {
+      revealed.current = job.id;
+      const first = (job.result?.outputs as string[] | undefined)?.find(Boolean);
+      if (first) void api.reveal(first);
+    }
+  }, [job]);
+  async function exportSlides(fmt: 'png' | 'jpg') {
+    setExportErr(null);
     try {
-      await fonts();
-      const cv = document.createElement("canvas");
-      cv.width = SLIDE.W;
-      cv.height = SLIDE.H;
-      const r = createCarouselRenderer(cv.getContext("2d")!);
-      let last = "";
-      for (let i = 0; i < project.slides.length; i++) {
-        r.render(project, i, images);
-        const data =
-          fmt === "png"
-            ? cv.toDataURL("image/png")
-            : cv.toDataURL("image/jpeg", 0.92);
-        last = (
-          await api.saveSlide(
-            slug,
-            `${slug}-${String(i + 1).padStart(2, "0")}.${fmt}`,
-            data,
-          )
-        ).path;
-        setExporting(`${i + 1} / ${project.slides.length} kaydedildi`);
-      }
-      setExporting(`${project.slides.length} slayt kaydedildi.`);
-      if (last) void api.reveal(last);
+      await useStore.getState().flush();
+      const { job } = await api.exportCarousel(slug, fmt);
+      useStore.getState().setJob(job);
+      setExportJob(job.id);
     } catch (e) {
-      setExporting("Kaydedilemedi: " + (e as Error).message);
+      setExportErr('Kaydedilemedi: ' + (e as Error).message);
     }
   }
 
-  async function addImage(type: "image" | "window" = "image") {
+  async function addImage(type: 'image' | 'window' = 'image') {
     const src = await pickImage(slug);
     if (!src) return;
     addEl(
-      type === "window"
+      type === 'window'
         ? el({ type, src, x: 76, y: 393, w: 925, h: 551 })
         : picks
           ? el({ type, src, x: 55, y: 112, w: 145, h: 145 })
           : el({ type, src, x: 72, y: 520, w: 936, h: 640 }),
     );
   }
+  async function addVideoWindow() {
+    const video = await pickVideo(slug);
+    if (video) addEl(el({ type: 'window', video, x: 76, y: 393, w: 925, h: 551 }));
+  }
 
-  const addEl = (n: SlideElement) => {
-    setSlide((s) => ({ ...s, elements: [...s.elements, n] }));
-    select({ kind: "element", slide: slide.id, id: n.id });
-  };
-
-  const insertSlide = (n: Slide) => {
-    updateCarousel((p) => {
-      const sl = p.slides.slice();
-      sl.splice(index + 1, 0, n);
-      return { ...p, slides: sl };
-    });
-    select({ kind: "slide", id: n.id });
-  };
+  const nVideoSlides = project.slides.filter((_, i) => slideVideos(project, i).length).length;
+  const zoomLabel = zoom === 'fit' ? 'Sığdır' : `%${Math.round(zoom * 100)}`;
 
   return (
-    <div className="editor">
+    <div className="editor carousel-editor">
       <TopBar slug={slug}>
-        {exporting && <span className="hint">{exporting}</span>}
-        <button
-          className="btn"
-          onClick={() => void exportSlides("jpg")}
-          disabled={claudeRunning}
-        >
+        {exportErr && <span className="err">{exportErr}</span>}
+        {job && (
+          <span className={'export-status' + (job.status === 'error' ? ' err' : '')} role="status">
+            {exporting && (
+              <span className="bar" role="progressbar" aria-label="Export ilerlemesi" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(job.progress * 100)}>
+                <i style={{ width: `${Math.round(job.progress * 100)}%` }} />
+              </span>
+            )}
+            {job.message}
+            {job.status === 'done' && (job.result?.outputs as string[] | undefined)?.length ? (
+              <button className="btn ghost small" onClick={() => void api.reveal((job.result!.outputs as string[]).find(Boolean)!)}>
+                Klasörü göster
+              </button>
+            ) : null}
+          </span>
+        )}
+        <button className="btn" onClick={() => void exportSlides('jpg')} disabled={claudeRunning || exporting} title={nVideoSlides ? 'Videolu slaytlar MP4 olarak kaydedilir' : undefined}>
           JPEG kaydet
         </button>
-        <button
-          className="btn primary"
-          onClick={() => void exportSlides("png")}
-          disabled={claudeRunning}
-        >
+        <button className="btn primary" onClick={() => void exportSlides('png')} disabled={claudeRunning || exporting} title={nVideoSlides ? 'Videolu slaytlar MP4 olarak kaydedilir' : undefined}>
           PNG kaydet
         </button>
       </TopBar>
 
-      <aside className="left" aria-label="Öğe ekle">
+      <aside className="left" aria-label="Öğe ekle ve katmanlar">
         <div className="panel-h">
           <h2>Öğe ekle</h2>
         </div>
         {picks ? (
           <>
-            <div className="section" style={{ gap: 6 }}>
-              <button
-                className="btn"
-                onClick={() =>
-                  addEl(
-                    el({
-                      type: "title",
-                      text: "Başlık",
-                      x: 76,
-                      y: 300,
-                      w: 925,
-                      h: 130,
-                      size: 96,
-                    }),
-                  )
-                }
-              >
+            <div className="section add-grid">
+              <button className="btn" onClick={() => addEl(el({ type: 'title', text: 'Başlık', x: 76, y: 300, w: 925, h: 130, size: 96 }))}>
                 Başlık
               </button>
-              <button
-                className="btn"
-                onClick={() =>
-                  addEl(
-                    el({
-                      type: "text",
-                      text: "Metin",
-                      x: 76,
-                      y: 600,
-                      w: 925,
-                      h: 110,
-                      size: 44,
-                    }),
-                  )
-                }
-              >
+              <button className="btn" onClick={() => addEl(el({ type: 'text', text: 'Metin', x: 76, y: 600, w: 925, h: 110, size: 44 }))}>
                 Metin
               </button>
-              <button className="btn" onClick={() => void addImage("window")}>
-                Pencerede ekran görüntüsü
+              <button className="btn" onClick={() => void addImage('window')}>
+                Pencerede görsel
               </button>
-              <button className="btn" onClick={() => void addImage("image")}>
-                Logo ya da görsel
+              <button className="btn" onClick={() => void addVideoWindow()}>
+                Pencerede video
               </button>
-              <button
-                className="btn"
-                onClick={() =>
-                  addEl(
-                    el({
-                      type: "pill",
-                      text: "Nasıl alınır, tek cümle.",
-                      x: 205,
-                      y: 1116,
-                      w: 670,
-                      h: 97,
-                      size: 30,
-                    }),
-                  )
-                }
-              >
+              <button className="btn" onClick={() => void addImage('image')}>
+                Logo / görsel
+              </button>
+              <button className="btn" onClick={() => addEl(el({ type: 'pill', text: 'Nasıl alınır, tek cümle.', x: 205, y: 1116, w: 670, h: 97, size: 30 }))}>
                 CTA hapı
               </button>
-            </div>
-            <div className="panel-h">
-              <h2>Hazır sayfa</h2>
-            </div>
-            <div className="section" style={{ gap: 6 }}>
-              <button
-                className="btn"
-                onClick={() => insertSlide(picksCoverSlide())}
-              >
-                Kapak ekle
+              <button className="btn" onClick={() => insertSlide(picksCoverSlide())}>
+                + Kapak
               </button>
-              <button
-                className="btn"
-                onClick={() => insertSlide(picksPickSlide(slide.accent))}
-              >
-                Seçki sayfası ekle
+              <button className="btn" onClick={() => insertSlide(picksPickSlide(slide.accent))}>
+                + Seçki sayfası
               </button>
             </div>
           </>
         ) : (
-          <div className="section" style={{ gap: 6 }}>
-            <button
-              className="btn"
-              onClick={() =>
-                addEl(
-                  el({
-                    type: "title",
-                    text: "Başlık",
-                    size: 96,
-                    y: 300,
-                    h: 240,
-                  }),
-                )
-              }
-            >
+          <div className="section add-grid">
+            <button className="btn" onClick={() => addEl(el({ type: 'title', text: 'Başlık', size: 96, y: 300, h: 240 }))}>
               Başlık
             </button>
-            <button
-              className="btn"
-              onClick={() =>
-                addEl(
-                  el({ type: "text", text: "Metin", size: 48, y: 600, h: 200 }),
-                )
-              }
-            >
+            <button className="btn" onClick={() => addEl(el({ type: 'text', text: 'Metin', size: 48, y: 600, h: 200 }))}>
               Metin
             </button>
-            <button
-              className="btn"
-              onClick={() =>
-                addEl(
-                  el({
-                    type: "chip",
-                    text: "01",
-                    size: 32,
-                    y: 220,
-                    w: 140,
-                    h: 60,
-                    color: "orange",
-                  }),
-                )
-              }
-            >
+            <button className="btn" onClick={() => addEl(el({ type: 'chip', text: '01', size: 32, y: 220, w: 140, h: 60, color: 'orange' }))}>
               Chip
             </button>
-            <button
-              className="btn"
-              onClick={() =>
-                addEl(
-                  el({
-                    type: "agent",
-                    x: 460,
-                    y: 900,
-                    w: 160,
-                    h: 160,
-                    color: "orange",
-                  }),
-                )
-              }
-            >
+            <button className="btn" onClick={() => addEl(el({ type: 'agent', x: 460, y: 900, w: 160, h: 160, color: 'orange' }))}>
               Pixel agent
             </button>
             <button className="btn" onClick={() => void addImage()}>
@@ -485,64 +324,49 @@ export function CarouselEditor({
             </button>
           </div>
         )}
-        <div className="section">
-          <p className="hint">
-            Öğeyi sürükleyerek taşı, sağ alt köşeden boyutlandır. Oklarla 1 px,
-            ⇧ ile 10 px it. Sol kenar {margin} px'e yapışır.
-            {picks &&
-              " Üst ve alt bant, seri adı ve sayfa numarası otomatik çizilir."}
-          </p>
+        <div className="panel-h">
+          <h2>Katmanlar</h2>
+          <span className="hint">üstteki önde</span>
         </div>
+        <div className="layers-wrap">
+          <Layers slide={slide} picks={picks} selIds={selIds} selectIds={selectIds} setElements={setElements} patchEls={patchEls} />
+        </div>
+        <details className="section shortcuts">
+          <summary>Kısayollar</summary>
+          <p className="hint">
+            Çift tık ya da Enter: metni düzenle · ⇧-tık / boş alanda sürükle: çoklu seçim · ⌘A tümü · ⌘C ⌘V ⌘D kopyala, yapıştır, çoğalt · ⌫ sil ·
+            oklar 1 px, ⇧ 10 px · ⌘] ⌘[ katman · ⌘+ ⌘− ⌘0 yakınlaştır · sürüklerken ⌘: yapışma kapalı · köşede ⇧: oran sabit (görsel, pencere)
+            {picks && ' · Üst/alt bant, seri adı ve sayfa numarası otomatik çizilir.'}
+          </p>
+        </details>
       </aside>
 
       <section className="stage" aria-label="Slayt">
-        <div
-          className="preview-wrap"
-          onPointerDown={() => select({ kind: "slide", id: slide.id })}
-        >
-          <div className="preview slide slide-stage" ref={stageRef}>
-            <SlideCanvas
-              project={project}
-              index={index}
-              images={images}
-              onOverflow={setOverflow}
-            />
-            {slide.elements.map((e) => (
-              <div
-                key={e.id}
-                className={
-                  "el-box" +
-                  (flash.has(e.id) ? " flash" : "") +
-                  (overflow.has(e.id) ? " over" : "")
-                }
-                aria-selected={selEl?.id === e.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`${e.type}: ${e.text || e.src || ""}`}
-                style={{
-                  left: `${(e.x / SLIDE.W) * 100}%`,
-                  top: `${(e.y / SLIDE.H) * 100}%`,
-                  width: `${(e.w / SLIDE.W) * 100}%`,
-                  height: `${(e.h / SLIDE.H) * 100}%`,
-                }}
-                onPointerDown={(ev) => startDrag(ev, e, "move")}
-                onFocus={() =>
-                  select({ kind: "element", slide: slide.id, id: e.id })
-                }
-              >
-                {selEl?.id === e.id && (
-                  <span
-                    className="rz"
-                    onPointerDown={(ev) => startDrag(ev, e, "resize")}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <Stage
+          project={project}
+          slide={slide}
+          index={index}
+          media={media}
+          picks={picks}
+          margin={margin}
+          selIds={selIds}
+          flash={flash}
+          overflow={overflow}
+          setOverflow={setOverflow}
+          selectIds={selectIds}
+          patchEls={patchEls}
+          editing={editing}
+          setEditing={setEditing}
+          zoom={zoom}
+          stageRef={stageRef}
+          scrollRef={scrollRef}
+          playing={playing}
+          togglePlay={() => setPlaying((p) => !p)}
+          videoInfo={videos.info}
+        />
         <div className="transport">
           <span className="hint">
-            Slayt {index + 1} / {project.slides.length} · 1080×1350
+            Slayt {index + 1} / {project.slides.length} · 1080×1350{vids.length ? ' · video (MP4)' : ''}
           </span>
           {overflow.size > 0 && (
             <span className="warn row" style={{ gap: 6 }}>
@@ -550,18 +374,22 @@ export function CarouselEditor({
             </span>
           )}
           <div className="stage-acts">
-            <button
-              className="btn small icon"
-              aria-label="Slaydı sola taşı"
-              title="Slaydı sola taşı"
-              disabled={index === 0}
-              onClick={() =>
-                updateCarousel((p) => ({
-                  ...p,
-                  slides: swap(p.slides, index, index - 1),
-                }))
-              }
-            >
+            <div className="zoom" role="group" aria-label="Yakınlaştırma">
+              <button className="btn small icon" aria-label="Uzaklaştır (⌘−)" title="Uzaklaştır (⌘−)" onClick={() => zoomBy(-1)}>
+                <ZoomOut size={15} />
+              </button>
+              <select className="select small" aria-label="Yakınlaştırma düzeyi" value={String(zoom)} onChange={(e) => setZoom(e.target.value === 'fit' ? 'fit' : Number(e.target.value))}>
+                <option value="fit">Sığdır</option>
+                {zoom !== 'fit' && ![0.5, 1, 1.5].includes(zoom) && <option value={String(zoom)}>{zoomLabel}</option>}
+                <option value="0.5">%50</option>
+                <option value="1">%100</option>
+                <option value="1.5">%150</option>
+              </select>
+              <button className="btn small icon" aria-label="Yakınlaştır (⌘+)" title="Yakınlaştır (⌘+)" onClick={() => zoomBy(1)}>
+                <ZoomIn size={15} />
+              </button>
+            </div>
+            <button className="btn small icon" aria-label="Slaydı sola taşı" title="Slaydı sola taşı" disabled={index === 0} onClick={() => strip.move(index, index - 1)}>
               <ChevronLeft size={15} />
             </button>
             <button
@@ -569,44 +397,14 @@ export function CarouselEditor({
               aria-label="Slaydı sağa taşı"
               title="Slaydı sağa taşı"
               disabled={index === project.slides.length - 1}
-              onClick={() =>
-                updateCarousel((p) => ({
-                  ...p,
-                  slides: swap(p.slides, index, index + 1),
-                }))
-              }
+              onClick={() => strip.move(index, index + 2)}
             >
               <ChevronRight size={15} />
             </button>
-            <button
-              className="btn small"
-              onClick={() => {
-                insertSlide({
-                  ...slide,
-                  id: newId("sl"),
-                  elements: slide.elements.map((e) => ({
-                    ...e,
-                    id: newId("el"),
-                  })),
-                });
-              }}
-            >
-              <Copy size={15} /> Kopyala
+            <button className="btn small" onClick={() => strip.duplicate(index)}>
+              <Copy size={15} /> Çoğalt
             </button>
-            <button
-              className="btn small danger"
-              disabled={project.slides.length <= 1}
-              onClick={() => {
-                updateCarousel((p) => ({
-                  ...p,
-                  slides: p.slides.filter((s) => s.id !== slide.id),
-                }));
-                select({
-                  kind: "slide",
-                  id: project.slides[Math.max(0, index - 1)].id,
-                });
-              }}
-            >
+            <button className="btn small danger" disabled={project.slides.length <= 1} onClick={() => strip.remove(index)}>
               <Trash size={15} /> Slaydı sil
             </button>
           </div>
@@ -615,619 +413,48 @@ export function CarouselEditor({
 
       <aside className="right" aria-label="Yan panel">
         <div className="tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={tab === "edit"}
-            onClick={() => setTab("edit")}
-          >
+          <button role="tab" aria-selected={tab === 'edit'} onClick={() => setTab('edit')}>
             Düzenle
           </button>
-          <button
-            role="tab"
-            className="claude-tab"
-            aria-selected={tab === "claude"}
-            onClick={() => setTab("claude")}
-          >
+          <button role="tab" className="claude-tab" aria-selected={tab === 'claude'} onClick={() => setTab('claude')}>
             Claude
             {claudeRunning && <span className="dot" aria-label="çalışıyor" />}
           </button>
         </div>
         <div className="tabpanel" role="tabpanel">
-          {tab === "claude" ? (
+          {tab === 'claude' ? (
             claudePanel
-          ) : selEl ? (
+          ) : selEls.length > 1 ? (
+            <MultiInspector slide={slide} ids={selIds} setElements={setElements} onClose={() => selectIds([])} onDelete={deleteSelected} />
+          ) : selEls.length === 1 ? (
             <ElementInspector
-              e={selEl}
+              key={selEls[0].id}
+              e={selEls[0]}
               picks={picks}
               onPickImage={async () => {
                 const src = await pickImage(slug);
-                if (src) setEl(selEl.id, { src });
+                if (src) setEl(selEls[0].id, { src });
               }}
-              need={overflow.get(selEl.id)}
-              set={(p, k) => setEl(selEl.id, p, k)}
-              onClose={() => select({ kind: "slide", id: slide.id })}
-              onDelete={() => (
-                setSlide((s) => ({
-                  ...s,
-                  elements: s.elements.filter((x) => x.id !== selEl.id),
-                })),
-                select({ kind: "slide", id: slide.id })
-              )}
+              onPickVideo={async () => {
+                const video = await pickVideo(slug);
+                if (video) setEl(selEls[0].id, { video });
+              }}
+              video={selEls[0].video ? videos.info.get(selEls[0].video) : undefined}
+              arrange={{ slide, ids: selIds, setElements }}
+              need={overflow.get(selEls[0].id)}
+              set={(p, k) => setEl(selEls[0].id, p, k)}
+              onClose={() => selectIds([])}
+              onDelete={deleteSelected}
             />
           ) : (
-            <CarouselInspector
-              slug={slug}
-              project={project}
-              slide={slide}
-              index={index}
-              setSlide={setSlide}
-            />
+            <CarouselInspector slug={slug} project={project} slide={slide} index={index} setSlide={setSlide} />
           )}
         </div>
       </aside>
 
       <div className="bottom">
-        <div className="strip" role="listbox" aria-label="Slaytlar">
-          {project.slides.map((s, i) => (
-            <button
-              key={s.id}
-              className={"thumb" + (flash.has(s.id) ? " flash" : "")}
-              role="option"
-              aria-selected={i === index}
-              onClick={() => select({ kind: "slide", id: s.id })}
-              aria-label={`Slayt ${i + 1}`}
-            >
-              <SlideCanvas project={project} index={i} images={images} />
-              <span>{i + 1}</span>
-            </button>
-          ))}
-          <button
-            className="add-tile"
-            onClick={() =>
-              insertSlide(
-                picks
-                  ? picksPickSlide(slide.accent)
-                  : {
-                      id: newId("sl"),
-                      bg: null,
-                      accent: null,
-                      elements: [
-                        el({
-                          type: "title",
-                          text: "Yeni slayt",
-                          size: 88,
-                          y: 300,
-                          h: 140,
-                        }),
-                      ],
-                    },
-              )
-            }
-          >
-            <Plus size={18} />
-            Slayt ekle
-          </button>
-        </div>
+        <SlideStrip project={project} index={index} images={media} flash={flash} act={strip} />
       </div>
     </div>
-  );
-}
-
-function swap<T>(xs: T[], i: number, j: number) {
-  const o = xs.slice();
-  [o[i], o[j]] = [o[j], o[i]];
-  return o;
-}
-
-function ElementInspector({
-  e,
-  picks,
-  need,
-  set,
-  onPickImage,
-  onDelete,
-  onClose,
-}: {
-  e: SlideElement;
-  picks: boolean;
-  need?: number;
-  set: (p: Partial<SlideElement>, key?: string) => void;
-  onPickImage: () => void;
-  onDelete: () => void;
-  onClose: () => void;
-}) {
-  const isText = e.type === "title" || e.type === "text";
-  const hasText = isText || e.type === "pill";
-  const words = e.text.split(/\s+/).filter(Boolean);
-  const TYPE_TR = {
-    title: "Başlık",
-    text: "Metin",
-    chip: "Chip",
-    image: picks ? "Logo / görsel" : "Görsel",
-    agent: "Pixel agent",
-    window: "Pencere",
-    pill: "CTA hapı",
-  };
-  return (
-    <>
-      <Header title={TYPE_TR[e.type]} onDelete={onDelete} onClose={onClose} />
-      <div className="section">
-        {need !== undefined && (
-          <div className="row wrap">
-            <span className="warn grow">
-              Metin kutudan taşıyor ({need} px gerekiyor).
-            </span>
-            <button className="btn small" onClick={() => set({ h: need })}>
-              Kutuyu metne göre uzat
-            </button>
-          </div>
-        )}
-        {(e.type === "image" || e.type === "window") && (
-          <button className="btn" onClick={onPickImage}>
-            {e.src ? "Görseli değiştir" : "Görsel seç"}
-          </button>
-        )}
-        {(hasText || e.type === "chip") && (
-          <label className="field">
-            <span>Metin</span>
-            <textarea
-              className="textarea"
-              rows={hasText ? 4 : 1}
-              value={e.text}
-              onChange={(ev) => set({ text: ev.target.value }, "text-" + e.id)}
-              autoFocus
-            />
-          </label>
-        )}
-        {isText && (
-          <div className="field">
-            <span>
-              {picks
-                ? "Vurgu (slaydın vurgu renginde)"
-                : "Vurgu (turuncu kutu)"}
-            </span>
-            <div className="row wrap">
-              <button
-                className="btn small"
-                aria-pressed={!e.emph}
-                onClick={() => set({ emph: null })}
-              >
-                Yok
-              </button>
-              {picks && e.text.trim() && (
-                <button
-                  className="btn small"
-                  aria-pressed={e.emph === e.text.trim()}
-                  onClick={() => set({ emph: e.text.trim() })}
-                >
-                  Tümü
-                </button>
-              )}
-              {picks &&
-                e.text
-                  .split("\n")
-                  .map((l) => l.trim())
-                  .filter((l, _i, all) => l && all.length > 1)
-                  .map((l, k) => (
-                    <button
-                      key={"l" + k}
-                      className="btn small"
-                      aria-pressed={e.emph === l}
-                      onClick={() => set({ emph: l })}
-                    >
-                      {k + 1}. satır
-                    </button>
-                  ))}
-              {words.slice(0, 16).map((w, k) => (
-                <button
-                  key={k}
-                  className="btn small"
-                  aria-pressed={e.emph === w}
-                  onClick={() => set({ emph: w })}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {picks && hasText && (
-          <div className="row">
-            <label className="field" style={{ width: 96 }}>
-              <span>Boyut</span>
-              <input
-                className="input tnum"
-                type="number"
-                min={12}
-                max={200}
-                value={e.size}
-                onChange={(ev) =>
-                  set({ size: Number(ev.target.value) || 12 }, "size-" + e.id)
-                }
-              />
-            </label>
-            <label className="field grow">
-              <span>Kalınlık</span>
-              <select
-                className="select"
-                value={e.weight ?? ""}
-                onChange={(ev) =>
-                  set({
-                    weight: ev.target.value ? Number(ev.target.value) : null,
-                  })
-                }
-              >
-                <option value="">Varsayılan</option>
-                {[400, 500, 600, 700, 800, 900].map((w) => (
-                  <option key={w} value={w}>
-                    {
-                      {
-                        400: "Normal",
-                        500: "Orta",
-                        600: "Yarı kalın",
-                        700: "Kalın",
-                        800: "Çok kalın",
-                        900: "Siyah",
-                      }[w]
-                    }
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-        {picks && hasText && (
-          <div className="field">
-            <span>{e.type === "pill" ? "Hap rengi" : "Metin rengi"}</span>
-            <div className="row">
-              <input
-                type="color"
-                className="swatch-input"
-                aria-label="Renk seç"
-                value={e.fill ?? (e.type === "pill" ? "#7c6538" : "#ffffff")}
-                onChange={(ev) =>
-                  set({ fill: ev.target.value.toUpperCase() }, "fill-" + e.id)
-                }
-              />
-              <button
-                className="btn small"
-                aria-pressed={!e.fill}
-                onClick={() => set({ fill: null })}
-              >
-                {e.type === "pill" ? "Vurgu renginden" : "Beyaz"}
-              </button>
-            </div>
-          </div>
-        )}
-        {!picks && e.type !== "image" && (
-          <div className="row">
-            {e.type !== "agent" && (
-              <label className="field" style={{ width: 96 }}>
-                <span>Boyut</span>
-                <input
-                  className="input tnum"
-                  type="number"
-                  min={12}
-                  max={200}
-                  value={e.size}
-                  onChange={(ev) =>
-                    set({ size: Number(ev.target.value) || 12 }, "size-" + e.id)
-                  }
-                />
-              </label>
-            )}
-            <label className="field grow">
-              <span>Renk</span>
-              <select
-                className="select"
-                value={e.color}
-                onChange={(ev) =>
-                  set({ color: ev.target.value as SlideElement["color"] })
-                }
-              >
-                {ACCENTS.map((a) => (
-                  <option key={a} value={a}>
-                    {ACCENT_TR[a]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-        {isText && (
-          <div className="seg" role="group" aria-label="Hizalama">
-            {(["left", "center", "right"] as const).map((a) => (
-              <button
-                key={a}
-                aria-pressed={e.align === a}
-                onClick={() => set({ align: a })}
-              >
-                {{ left: "Sola", center: "Ortaya", right: "Sağa" }[a]}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="row">
-          {(["x", "y", "w", "h"] as const).map((k) => (
-            <label key={k} className="field grow">
-              <span>
-                {{ x: "X", y: "Y", w: "Genişlik", h: "Yükseklik" }[k]}
-              </span>
-              <input
-                className="input tnum"
-                type="number"
-                value={e[k]}
-                onChange={(ev) =>
-                  set({ [k]: Number(ev.target.value) || 0 }, k + "-" + e.id)
-                }
-              />
-            </label>
-          ))}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function CarouselInspector({
-  slug,
-  project,
-  slide,
-  index,
-  setSlide,
-}: {
-  slug: string;
-  project: CarouselProject;
-  slide: Slide;
-  index: number;
-  setSlide: (fn: (s: Slide) => Slide, key?: string) => void;
-}) {
-  const { updateCarousel } = useStore.getState();
-  const picks = project.style === "picks";
-  const [series, setSeries] = useState<
-    { slug: string; series: string; category: string; number: number }[]
-  >([]);
-  useEffect(() => {
-    if (picks)
-      void api.series().then(
-        (r) => setSeries(r.series.filter((x) => x.slug !== slug)),
-        () => {},
-      );
-  }, [picks, slug]);
-  const setPicks = (patch: Partial<CarouselProject["picks"]>, key?: string) =>
-    updateCarousel((p) => ({ ...p, picks: { ...p.picks, ...patch } }), key);
-  const next = nextSeriesNumber(project.picks.series, series);
-  const sameKey = (x: string) => x.trim().toUpperCase();
-  const dup = series.find(
-    (x) =>
-      sameKey(x.series) === sameKey(project.picks.series) &&
-      x.number === project.picks.number,
-  );
-  const names = [...new Set(series.map((x) => x.series))];
-  const cats = [...new Set(series.map((x) => x.category).filter(Boolean))];
-  const accent = slide.accent ?? PICKS_GOLD;
-  return (
-    <>
-      <div className="panel-h">
-        <h2>Carousel</h2>
-      </div>
-      <div className="section">
-        <label className="field">
-          <span>Başlık</span>
-          <input
-            className="input"
-            value={project.title}
-            onChange={(e) =>
-              updateCarousel((p) => ({ ...p, title: e.target.value }), "title")
-            }
-          />
-        </label>
-        <div className="field">
-          <span>Stil</span>
-          <div className="seg" role="group" aria-label="Stil">
-            <button
-              aria-pressed={picks}
-              onClick={() => updateCarousel((p) => ({ ...p, style: "picks" }))}
-            >
-              Ceren's Picks
-            </button>
-            <button
-              aria-pressed={!picks}
-              onClick={() => updateCarousel((p) => ({ ...p, style: "pixel" }))}
-            >
-              Pixel (krem)
-            </button>
-          </div>
-        </div>
-        {picks ? (
-          <>
-            <label className="field">
-              <span>Hesap (sol üst)</span>
-              <input
-                className="input"
-                value={project.picks.handle}
-                onChange={(e) => setPicks({ handle: e.target.value }, "handle")}
-              />
-            </label>
-            <label className="field">
-              <span>Kategori (sağ üst)</span>
-              <input
-                className="input"
-                list="cb-cats"
-                value={project.picks.category}
-                onChange={(e) =>
-                  setPicks({ category: e.target.value }, "category")
-                }
-              />
-              <datalist id="cb-cats">
-                {cats.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </label>
-            <div className="row" style={{ alignItems: "end" }}>
-              <label className="field grow">
-                <span>Seri (sol alt)</span>
-                <input
-                  className="input"
-                  list="cb-series"
-                  value={project.picks.series}
-                  onChange={(e) =>
-                    setPicks({ series: e.target.value }, "series")
-                  }
-                />
-                <datalist id="cb-series">
-                  {names.map((n) => (
-                    <option key={n} value={n} />
-                  ))}
-                </datalist>
-              </label>
-              <label className="field" style={{ width: 84 }}>
-                <span>Numara</span>
-                <input
-                  className="input tnum"
-                  type="number"
-                  min={0}
-                  value={project.picks.number}
-                  onChange={(e) =>
-                    setPicks(
-                      {
-                        number: Math.max(
-                          0,
-                          Math.round(Number(e.target.value) || 0),
-                        ),
-                      },
-                      "number",
-                    )
-                  }
-                />
-              </label>
-            </div>
-            {dup && (
-              <div className="row wrap">
-                <span className="warn grow">
-                  {String(project.picks.number).padStart(3, "0")} numarası “
-                  {dup.slug}” projesinde de var. Bu serinin sıradaki numarası{" "}
-                  {String(next).padStart(3, "0")}.
-                </span>
-                <button
-                  className="btn small"
-                  onClick={() => setPicks({ number: next })}
-                >
-                  {String(next).padStart(3, "0")} yap
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="row">
-            <label className="field" style={{ width: 120 }}>
-              <span>İçerik dünyası</span>
-              <select
-                className="select"
-                value={project.header.world}
-                onChange={(e) =>
-                  updateCarousel((p) => ({
-                    ...p,
-                    header: {
-                      ...p.header,
-                      world: e.target.value as typeof p.header.world,
-                    },
-                  }))
-                }
-              >
-                {WORLDS.map((w) => (
-                  <option key={w}>{w}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field grow">
-              <span>Konu etiketi</span>
-              <input
-                className="input"
-                value={project.header.topic}
-                onChange={(e) =>
-                  updateCarousel(
-                    (p) => ({
-                      ...p,
-                      header: { ...p.header, topic: e.target.value },
-                    }),
-                    "topic",
-                  )
-                }
-              />
-            </label>
-          </div>
-        )}
-        <p className="hint">
-          Bir öğeyi seçince ayarları burada açılır. Instagram carousel'i en
-          fazla 20 slayt alır; bu projede {project.slides.length} slayt var.
-        </p>
-      </div>
-      {picks && (
-        <>
-          <div className="panel-h">
-            <h2>Slayt {index + 1}</h2>
-          </div>
-          <div className="section">
-            <div className="field">
-              <span>Vurgu rengi (vurgulu metin ve CTA hapı)</span>
-              <div className="row wrap">
-                {PICKS_ACCENTS.map(([hex, name]) => (
-                  <button
-                    key={hex}
-                    className="swatch"
-                    style={{ background: hex }}
-                    aria-label={name}
-                    title={name}
-                    aria-pressed={accent.toUpperCase() === hex.toUpperCase()}
-                    onClick={() =>
-                      setSlide((s) => ({
-                        ...s,
-                        accent: hex === PICKS_GOLD ? null : hex,
-                      }))
-                    }
-                  />
-                ))}
-                <input
-                  type="color"
-                  className="swatch-input"
-                  aria-label="Özel renk"
-                  value={accent.toLowerCase()}
-                  onChange={(e) =>
-                    setSlide(
-                      (s) => ({ ...s, accent: e.target.value.toUpperCase() }),
-                      "accent-" + slide.id,
-                    )
-                  }
-                />
-              </div>
-            </div>
-            <div className="field">
-              <span>Arka plan fotoğrafı</span>
-              <div className="row">
-                <button
-                  className="btn"
-                  onClick={async () => {
-                    const src = await pickImage(slug);
-                    if (src) setSlide((s) => ({ ...s, bg: src }));
-                  }}
-                >
-                  {slide.bg ? "Fotoğrafı değiştir" : "Fotoğraf seç"}
-                </button>
-                {slide.bg && (
-                  <button
-                    className="btn ghost danger"
-                    onClick={() => setSlide((s) => ({ ...s, bg: null }))}
-                  >
-                    Kaldır
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </>
   );
 }

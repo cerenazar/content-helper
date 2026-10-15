@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { timeline } from '@cb/renderer';
-import { useStore, type Selection } from './store';
+import { useStore, selectedElementIds, type Selection } from './store';
 import type { ClaudeState } from './useClaude';
 import type { Project } from '@cb/schema';
 import type { ChatEntry } from './api';
@@ -55,11 +55,11 @@ function describe(p: Project, sel: Selection, time: number): { short: string; fu
       short = `slayt ${i + 1}`;
       lines.push(`seçili slayt #${i + 1} id=${sid}`);
       if (sel.kind === 'element') {
-        const el = p.slides[i]?.elements.find((e) => e.id === sel.id);
-        if (el) {
-          short += ` · ${el.type}`;
-          lines.push(`seçili öğe id=${el.id} tür=${el.type} metin="${el.text}"`);
-        }
+        const ids = selectedElementIds(sel);
+        const els = (p.slides[i]?.elements ?? []).filter((e) => ids.includes(e.id));
+        if (els.length === 1) short += ` · ${els[0].type}`;
+        else if (els.length > 1) short += ` · ${els.length} öğe`;
+        for (const el of els) lines.push(`seçili öğe id=${el.id} tür=${el.type} metin="${el.text}"${el.video ? ` video=${el.video}` : ''}`);
       }
     }
   }

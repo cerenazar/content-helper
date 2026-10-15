@@ -79,6 +79,9 @@ export function slideEl(o: Partial<SlideElement> & Pick<SlideElement, 'type'>): 
     src: null,
     fill: null,
     weight: null,
+    hidden: false,
+    locked: false,
+    video: null,
     ...o,
   };
 }

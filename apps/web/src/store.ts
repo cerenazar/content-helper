@@ -9,8 +9,18 @@ export type Selection =
   | { kind: 'clip'; id: string }
   | { kind: 'sfx'; id: string }
   | { kind: 'slide'; id: string }
-  | { kind: 'element'; slide: string; id: string }
+  /**
+   * Carousel öğesi. id: birincil (inspector'da açılan) öğe. ids: çoklu seçimde tüm seçili öğeler
+   * (id dahil). Yoksa yalnız id seçilidir. Reel seçimi bundan etkilenmez.
+   */
+  | { kind: 'element'; slide: string; id: string; ids?: string[] }
   | null;
+
+/** Seçili carousel öğelerinin id'leri (tekli seçimde tek elemanlı). */
+export function selectedElementIds(s: Selection): string[] {
+  if (s?.kind !== 'element') return [];
+  return s.ids?.length ? s.ids : [s.id];
+}
 
 interface Doc {
   project: Project;
