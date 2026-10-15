@@ -2,6 +2,17 @@
    turuncu (--claude) yalnızca Claude'un değiştirdiği öğelerde. */
 .carousel-editor { --guide: #f25fc8; }
 
+/* Düzen (reel ile aynı mantık): öğe ekle + katmanlar | slayt | özellikler | Claude; şerit slaydın altında. */
+.editor.carousel-editor {
+  grid-template-columns: 248px minmax(0, 1fr) 300px 360px;
+  grid-template-rows: 48px minmax(0, 1fr) auto;
+  grid-template-areas: 'top top top top' 'left stage insp right' 'bottom bottom insp right';
+}
+.carousel-editor .left { border-right: 1px solid var(--rule); }
+@media (max-width: 1280px) {
+  .editor.carousel-editor { grid-template-columns: 220px minmax(0, 1fr) 272px 320px; }
+}
+
 /* ---- Sahne: kaydırılabilir, yakınlaştırılabilir ---- */
 .stage-scroll { min-height: 0; min-width: 0; overflow: auto; display: flex; padding: 28px; user-select: none; -webkit-user-select: none; }
 .stage-scroll > .slide-stage { margin: auto; flex: none; }
@@ -78,8 +89,7 @@
 .layer-prev { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .layer .btn.tiny { width: 28px; min-height: 28px; }
 .layer .btn.tiny[aria-pressed='true'] { background: transparent; border-color: transparent; color: var(--warn); }
-.shortcuts summary { cursor: pointer; color: var(--text-2); font-size: 12px; padding: 4px 0; }
-.shortcuts p { margin: 6px 0 0; line-height: 1.6; }
+.layers-note { margin: 10px 6px 0; }
 
 /* ---- Sağ panel araçları ---- */
 .toolrow { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -87,11 +97,14 @@
 
 /* ---- Alt çubuk ---- */
 .zoom { display: flex; align-items: center; gap: 4px; margin-right: 8px; }
+.slide-pos { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.overflow-note { gap: 6px; white-space: nowrap; }
+.slide-pos b { color: var(--text); font-weight: 600; }
 .select.small { min-height: 26px; padding: 2px 6px; font-size: 12px; width: auto; }
 .export-status { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12px; }
 .export-status.err { color: var(--err); }
 .export-status .bar { width: 90px; height: 4px; border-radius: 4px; background: var(--bay-3); overflow: hidden; }
-.export-status .bar i { display: block; height: 100%; background: var(--sel); transition: width 200ms var(--ease); }
+.export-status .bar i { display: block; height: 100%; background: var(--sel); transition: width 200ms linear; }
 
 /* ---- Slayt şeridi ---- */
 .strip { display: flex; gap: 10px; padding: 10px 12px; overflow-x: auto; align-items: center; }
@@ -107,7 +120,7 @@
 .strip .thumb .thumb-vid { position: absolute; right: 4px; bottom: 4px; background: rgba(31, 26, 23, 0.8); color: #fff; padding: 2px 3px; border-radius: 3px; display: grid; }
 .thumb-more {
   position: absolute; top: 4px; right: 4px; width: 26px; height: 22px; display: grid; place-items: center; border-radius: 4px;
-  border: 0; background: rgba(31, 26, 23, 0.82); color: #fff; cursor: pointer; opacity: 0; transition: opacity 120ms var(--ease);
+  border: 0; background: rgba(31, 26, 23, 0.82); color: #fff; cursor: pointer; opacity: 0; transition: opacity var(--dur-quick) ease-out;
 }
 .thumb-wrap:hover .thumb-more, .thumb-more:focus-visible, .thumb-more[aria-expanded='true'], .thumb-wrap:has(.thumb[aria-selected='true']) .thumb-more { opacity: 1; }
 .strip .add-tile { flex: none; width: 96px; aspect-ratio: 4/5; border-radius: 4px; border: 1.5px dashed var(--rule); background: transparent; color: var(--text-2); display: grid; place-content: center; justify-items: center; gap: 4px; cursor: pointer; font-size: 12px; }
@@ -118,3 +131,9 @@
 .menu button:hover:not(:disabled), .menu button:focus-visible { background: var(--bay-3); outline: none; }
 .menu button:disabled { opacity: 0.4; cursor: default; }
 .menu button.danger { color: var(--err); }
+
+@media (max-width: 900px) {
+  .stage-scroll { padding: 16px; }
+  .stage-scroll.fit > .slide-stage { width: 100%; }
+  .carousel-editor .stage-acts { margin-left: 0; flex-wrap: wrap; }
+}

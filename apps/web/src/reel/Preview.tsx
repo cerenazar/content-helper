@@ -47,18 +47,26 @@ export function Preview({ slug, project, scenes }: { slug: string; project: Reel
       v.preload = 'auto';
       v.playsInline = true;
       v.crossOrigin = 'anonymous';
+      // src yalnızca proxy hazır olunca verilir: hazırlanırken istek atılıp 404 alınmasın.
+      let errors = 0;
       const load = () => {
+        if (map.get(c.id) !== v) return; // klip bu arada kaldırıldı
         v.src = api.proxyUrl(slug, c.id) + '?v=' + Date.now();
       };
       v.addEventListener('seeked', () => (dirty.current = true));
       v.addEventListener('loadeddata', () => (dirty.current = true));
-      v.addEventListener('error', () => setTimeout(load, 2500)); // proxy henüz hazır değilse tekrar dene
+      v.addEventListener('error', () => {
+        if (v.getAttribute('src') && ++errors <= 3) setTimeout(() => kick(), 2500);
+      });
       map.set(c.id, v);
-      const kick = (n = 0) =>
-        void api
-          .proxy(slug, c.id)
-          .then(load)
-          .catch(() => n < 10 && setTimeout(() => kick(n + 1), 1000));
+      // Sunucu proxy'yi arka planda üretir; durum "ready" olana kadar saniyede bir sorulur.
+      const kick = (n = 0): void => {
+        if (map.get(c.id) !== v) return;
+        void api.proxy(slug, c.id).then(
+          (r) => (r.status === 'ready' ? load() : n < 600 && setTimeout(() => kick(n + 1), 1000)),
+          () => n < 10 && setTimeout(() => kick(n + 1), 1000),
+        );
+      };
       kick();
     }
     for (const [id, v] of map)

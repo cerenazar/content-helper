@@ -6,6 +6,8 @@ import type { Project } from '@cb/schema';
 import type { ChatEntry } from './api';
 import { AgentAvatar } from './icons';
 
+const EL_TR: Record<string, string> = { title: 'başlık', text: 'metin', chip: 'chip', image: 'görsel', agent: 'pixel agent', window: 'pencere', pill: 'CTA hapı' };
+
 /** Seçili öğeyi ve oynatma kafasını Claude'a okunur bağlam olarak verir. */
 function describe(p: Project, sel: Selection, time: number): { short: string; full: string } {
   const lines: string[] = [];
@@ -57,7 +59,7 @@ function describe(p: Project, sel: Selection, time: number): { short: string; fu
       if (sel.kind === 'element') {
         const ids = selectedElementIds(sel);
         const els = (p.slides[i]?.elements ?? []).filter((e) => ids.includes(e.id));
-        if (els.length === 1) short += ` · ${els[0].type}`;
+        if (els.length === 1) short += ` · ${EL_TR[els[0].type] ?? els[0].type}`;
         else if (els.length > 1) short += ` · ${els.length} öğe`;
         for (const el of els) lines.push(`seçili öğe id=${el.id} tür=${el.type} metin="${el.text}"${el.video ? ` video=${el.video}` : ''}`);
       }
@@ -77,6 +79,7 @@ export function ClaudePanel({ claude }: { slug: string; claude: ClaudeState }) {
   const time = useStore((s) => s.time);
   const [text, setText] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const ctx = describe(project, sel, time);
 
   useEffect(() => {
@@ -100,7 +103,13 @@ export function ClaudePanel({ claude }: { slug: string; claude: ClaudeState }) {
             <p style={{ margin: 0 }}>Claude bu projeyi seninle aynı anda düzenler. Bir şey seçip "bunu kısalt" diyebilirsin. Her değişiklik geri alınabilir.</p>
             <div className="sugs">
               {SUGGEST[project.kind].map((s) => (
-                <button key={s} onClick={() => setText(s)}>
+                <button
+                  key={s}
+                  onClick={() => {
+                    setText(s);
+                    inputRef.current?.focus(); // öneri kutuya gelir, ⌘↩ ile gönderilir ya da düzenlenir
+                  }}
+                >
                   {s}
                 </button>
               ))}
@@ -168,6 +177,7 @@ export function ClaudePanel({ claude }: { slug: string; claude: ClaudeState }) {
           )}
         </div>
         <textarea
+          ref={inputRef}
           className="textarea"
           rows={3}
           placeholder="Claude'a yaz… (⌘↩ gönderir)"

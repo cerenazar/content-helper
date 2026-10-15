@@ -136,7 +136,7 @@ export function starterCarousel(title: string, style: CarouselStyle = 'picks', p
         bg: null,
         accent: null,
         elements: [
-          el({ type: 'title', text: '3 ayarla Claude Code\n2 kat hızlı', emph: '2 kat', size: 104, y: 380, h: 300 }),
+          el({ type: 'title', text: '3 ayarla Claude Code\n2 kat hızlı', emph: '2 kat', size: 104, y: 380, h: 400 }),
           el({ type: 'agent', x: 460, y: 820, w: 160, h: 160, color: 'orange' }),
           el({ type: 'text', text: 'kaydır →', size: 40, color: 'orange', align: 'right', y: 1180, h: 60 }),
         ],

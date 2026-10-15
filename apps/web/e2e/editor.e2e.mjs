@@ -29,6 +29,9 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true }).cat
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
+// Proxy hazırlanırken önizleme istek atmamalı (404 yok).
+const proxy404 = [];
+page.on('response', (r) => r.status() === 404 && r.url().includes('/proxy.mp4') && proxy404.push(r.url()));
 let ok = 0;
 const step = async (name, fn) => {
   await fn();
@@ -209,6 +212,12 @@ try {
     assert.notEqual(await page.textContent('.transport .time'), '0:00.00');
   });
 
+  await step('yeni klibin proxy\'si hazırlanırken 404 isteği yok', async () => {
+    await until(async () => (await fetch(`${WEB}/api/projects/${ed.slug}/clips/${clips[0].id}/proxy`, { method: 'POST' }).then((r) => r.json())).status === 'ready', 30000);
+    await page.waitForTimeout(1200);
+    assert.deepEqual(proxy404, []);
+  });
+
   await step('? kısayol listesini açar, Esc kapatır', async () => {
     await page.keyboard.press('?');
     await page.waitForSelector('role=dialog[name="Klavye kısayolları"]');
@@ -221,6 +230,20 @@ try {
   await page.goto(`${WEB}/#/p/${car.slug}`);
   await page.waitForSelector('.slide-stage canvas');
 
+  await step('carousel: Claude paneli her zaman görünür, özellikler ayrı sütunda', async () => {
+    assert.ok(await page.isVisible('.claude-col textarea'));
+    assert.equal(await page.locator('[role=tab]').count(), 0, 'Düzenle / Claude sekmesi kalmamalı');
+    await page.waitForSelector('.insp >> text=Carousel');
+  });
+
+  await step('carousel: ? kısayol listesini açar, Esc kapatır', async () => {
+    await page.click('.stage-scroll');
+    await page.keyboard.press('?');
+    await page.waitForSelector('role=dialog[name="Klavye kısayolları"] >> text=Seçiliyi çoğalt');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.keys-dialog', { state: 'detached' });
+  });
+
   await step('carousel: öğeyi sürükle → x/y değişir', async () => {
     const box = page.locator('.el-box >> nth=0');
     const b = await box.boundingBox();
@@ -230,6 +253,13 @@ try {
     await page.mouse.move(b.x + b.width / 2 + 5, b.y + b.height / 2 + 80, { steps: 6 });
     await page.mouse.up();
     await until(async () => (await disk(car.slug)).slides[0].elements[0].y > before.y + 50);
+  });
+
+  await step('carousel: öğe seçilince özellikler açılır, Claude yerinde kalır', async () => {
+    await page.locator('.el-box >> nth=0').click();
+    await page.waitForSelector('.insp >> text=Kilitle');
+    assert.ok(await page.isVisible('.claude-col textarea'));
+    assert.match(await page.textContent('.composer .ctx-line'), /slayt 1 · (başlık|metin)/);
   });
 
   await step('carousel: çift tıkla yerinde metin düzenle, Esc kaydeder', async () => {

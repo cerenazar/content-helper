@@ -225,7 +225,10 @@ function CreateBand({ busy, onCreate }: { busy: boolean; onCreate: (k: Kind, tit
           onCreate('reel', title);
         }}
       >
-        <input className="input" placeholder="Konu, ör. 4 agent 1 çay (boş da bırakabilirsin)" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Konu" />
+        <label className="field">
+          <span>Konu (isteğe bağlı, proje adı olur)</span>
+          <input className="input" placeholder="ör. 4 agent 1 çay" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
       </form>
       <div className="create-tiles">
         <button className="tile" disabled={busy} onClick={() => onCreate('reel', title)}>
@@ -282,19 +285,30 @@ function ProjectsPage({ list }: { list: ProjectSummary[] | null }) {
           ))}
         </div>
       </header>
-      <ProjectGrid list={shown} />
+      <ProjectGrid
+        list={shown}
+        empty={
+          list && list.length > 0 ? (
+            'Bu türde proje yok.'
+          ) : (
+            <>
+              Henüz proje yok. <a href="#/">Ana sayfadan</a> bir reel ya da carousel başlat.
+            </>
+          )
+        }
+      />
     </section>
   );
 }
 
-function ProjectGrid({ list }: { list: ProjectSummary[] | null }) {
+function ProjectGrid({ list, empty }: { list: ProjectSummary[] | null; empty?: React.ReactNode }) {
   if (!list)
     return (
       <p className="empty" role="status">
         Projeler yükleniyor…
       </p>
     );
-  if (list.length === 0) return <p className="empty">Henüz proje yok. Yukarıdan bir reel ya da carousel başlat.</p>;
+  if (list.length === 0) return <p className="empty">{empty ?? 'Henüz proje yok. Yukarıdan bir reel ya da carousel başlat.'}</p>;
   return (
     <ul className="pgrid">
       {list.map((p) => (

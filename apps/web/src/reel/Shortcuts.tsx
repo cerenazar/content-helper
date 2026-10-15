@@ -17,7 +17,26 @@ export const SHORTCUTS: [string[], string][] = [
   [['?'], 'Bu listeyi aç / kapat'],
 ];
 
-export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+/** Carousel kısayolları (sahne ve katmanlar). */
+export const CAROUSEL_SHORTCUTS: [string[], string][] = [
+  [['Çift tık', '↩'], 'Seçili metni yerinde düzenle'],
+  [['⇧-tık'], 'Seçime ekle / çıkar (boş alanda sürükleyerek de seçilir)'],
+  [['⌘A'], 'Slayttaki tüm öğeleri seç'],
+  [['⌘C', '⌘X', '⌘V'], 'Kopyala / kes / yapıştır (başka slayta da)'],
+  [['⌘D'], 'Seçiliyi çoğalt'],
+  [['⌫'], 'Seçiliyi sil (kilitli öğeler silinmez)'],
+  [['←', '→', '↑', '↓'], '1 px kaydır (⇧ ile 10 px)'],
+  [['⌘]', '⌘['], 'Bir katman öne / arkaya (⇧ ile en öne / en arkaya)'],
+  [['⌥↑', '⌥↓'], 'Katmanlar listesinde sırayı değiştir'],
+  [['⌘+', '⌘−', '⌘0'], 'Yakınlaştır / uzaklaştır / sığdır'],
+  [['⌘'], 'Sürüklerken basılı tut: yapışma kapalı'],
+  [['⇧'], 'Köşeden boyutlarken oranı koru (görsel, pencere)'],
+  [['Esc'], 'Seçimi kaldır'],
+  [['⌘Z', '⇧⌘Z'], 'Geri al / yinele'],
+  [['?'], 'Bu listeyi aç / kapat'],
+];
+
+export function ShortcutsDialog({ onClose, items = SHORTCUTS }: { onClose: () => void; items?: [string[], string][] }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -47,7 +66,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <dl className="keys">
-          {SHORTCUTS.map(([keys, label]) => (
+          {items.map(([keys, label]) => (
             <div key={label} className="keys-row">
               <dt>
                 {keys.map((k) => (

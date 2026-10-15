@@ -9,10 +9,14 @@ export function ExportDialog({ slug, jobId, onClose }: { slug: string; jobId: st
   const job = useStore((s) => s.jobs[jobId]) as Job | undefined;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     const on = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     addEventListener('keydown', on);
-    return () => removeEventListener('keydown', on);
+    return () => {
+      removeEventListener('keydown', on);
+      prev?.focus?.(); // kapanınca odak Dışa aktar düğmesine döner
+    };
   }, [onClose]);
 
   const r = job?.result;
