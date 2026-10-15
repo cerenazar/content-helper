@@ -5,7 +5,7 @@ import os from 'node:os';
 import { build } from 'esbuild';
 import { chromium, type Browser } from 'playwright-core';
 import { REEL, IG_LIMIT_BYTES, type ReelProject } from '@cb/schema';
-import { timeline, frameCount, ffmpegCrop } from '@cb/renderer';
+import { timeline, frameCount, ffmpegCrop, sfxFilter } from '@cb/renderer';
 import { files, PORT, SERVER_DIR } from './paths';
 import { run, probe } from './ffmpeg';
 import { startJob } from './events';
@@ -69,15 +69,19 @@ async function doExport(slug: string, job: ReturnType<typeof startJob>) {
   // 2) Compose
   const out = path.join(f.exports, `${slug}.mp4`);
   const speech = project.audio === 'speech' && bottomFile !== null;
+  const sfx = sfxInputs(project, f.dir);
   const args = ['-v', 'error', '-y'];
   if (bottomFile) args.push('-i', bottomFile);
   else args.push('-f', 'lavfi', '-i', `color=c=0xF5F0E9:s=1080x960:r=30:d=${tl.duration}`);
   args.push('-framerate', '30', '-i', path.join(work, 'ov', '%05d.png'));
   if (!speech) args.push('-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo');
+  // Ses efektleri: her biri ayrı girdi; konuşma varsa onun üstüne, yoksa sessizliğin üstüne karışır.
+  for (const s of sfx) args.push('-i', s.file);
+  const audio = sfxFilter(speech ? '[0:a]' : '[2:a]', sfx, speech ? 2 : 3, N / REEL.FPS);
   args.push(
     '-filter_complex',
-    `[0:v]tpad=stop_mode=add:stop_duration=600:color=0xF5F0E9,pad=1080:1920:0:960:color=0xF5F0E9[b];[b][1:v]overlay=0:0:shortest=1,format=yuv420p[v]` + (speech ? ';[0:a]apad[a]' : ''),
-    '-map', '[v]', '-map', speech ? '[a]' : '2:a',
+    `[0:v]tpad=stop_mode=add:stop_duration=600:color=0xF5F0E9,pad=1080:1920:0:960:color=0xF5F0E9[b];[b][1:v]overlay=0:0:shortest=1,format=yuv420p[v];` + audio,
+    '-map', '[v]', '-map', '[a]',
     '-frames:v', String(N), '-t', String(N / REEL.FPS),
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-movflags', '+faststart', out,
@@ -170,4 +174,14 @@ async function renderBottom(project: ReelProject, work: string): Promise<string 
   const bottom = path.join(work, 'bottom.mp4');
   await run('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', bottom]);
   return bottom;
+}
+
+/** Ses efekti dosyalarını proje klasörü içinde çözer; eksik dosyada export durur. */
+function sfxInputs(project: ReelProject, dir: string) {
+  return project.sfx.map((s, i) => {
+    const file = path.resolve(dir, s.src);
+    if (!file.startsWith(dir + path.sep)) throw new Error(`Ses efekti ${i + 1}: proje klasörü dışında (${s.src})`);
+    if (!existsSync(file)) throw new Error(`Ses efekti dosyası yok: ${s.src}`);
+    return { file, at: s.at, gain: s.gain };
+  });
 }

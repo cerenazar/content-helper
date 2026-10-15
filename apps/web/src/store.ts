@@ -7,6 +7,7 @@ export type Selection =
   | { kind: 'cut'; id: string }
   | { kind: 'scene'; id: string }
   | { kind: 'clip'; id: string }
+  | { kind: 'sfx'; id: string }
   | { kind: 'slide'; id: string }
   | { kind: 'element'; slide: string; id: string }
   | null;
@@ -26,6 +27,8 @@ interface State extends Doc {
   selection: Selection;
   time: number;
   playing: boolean;
+  /** Oynatma hızı ve yönü (J/K/L): 1 normal, 2/4 hızlı, negatif geri. */
+  rate: number;
   claudeRunning: boolean;
   /** Claude'un son turda değiştirdiği öğe id'leri (kısa süre turuncu yanar). */
   flash: Set<string>;
@@ -45,6 +48,8 @@ interface State extends Doc {
   select(s: Selection): void;
   setTime(t: number): void;
   setPlaying(p: boolean): void;
+  /** Hız/yön ayarlayıp oynatır (J/K/L). */
+  shuttle(rate: number): void;
   setJob(j: Job): void;
   /** Bekleyen kaydı hemen yaz (sunucunun diskten okuyacağı işlerden önce). */
   flush(): Promise<void>;
@@ -64,6 +69,7 @@ function changedIds(a: Project, b: Project): Set<string> {
     cmp(a.captions, b.captions);
     cmp(a.edl, b.edl);
     cmp(a.scenes, b.scenes);
+    cmp(a.sfx, b.sfx);
   }
   if (a.kind === 'carousel' && b.kind === 'carousel') {
     cmp(a.slides, b.slides);
@@ -118,6 +124,7 @@ export const useStore = create<State>((set, get) => {
     selection: null,
     time: 0,
     playing: false,
+    rate: 1,
     claudeRunning: false,
     flash: new Set(),
     jobs: {},
@@ -125,7 +132,7 @@ export const useStore = create<State>((set, get) => {
     lastAt: 0,
 
     open(slug, project, scenes, claudeRunning) {
-      set({ slug, project, scenes, claudeRunning, past: [], future: [], selection: null, time: 0, playing: false, saveState: 'saved', invalidError: null, jobs: {} });
+      set({ slug, project, scenes, claudeRunning, past: [], future: [], selection: null, time: 0, playing: false, rate: 1, saveState: 'saved', invalidError: null, jobs: {} });
     },
     apply(fn, key) {
       if (get().claudeRunning) return;
@@ -172,7 +179,8 @@ export const useStore = create<State>((set, get) => {
     },
     select: (selection) => set({ selection }),
     setTime: (time) => set({ time: Math.max(0, time) }),
-    setPlaying: (playing) => set({ playing }),
+    setPlaying: (playing) => set({ playing, rate: 1 }),
+    shuttle: (rate) => set({ playing: true, rate }),
     setJob: (j) => set({ jobs: { ...get().jobs, [j.id]: j } }),
     async flush() {
       if (saveTimer) clearTimeout(saveTimer);

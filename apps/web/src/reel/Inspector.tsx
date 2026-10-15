@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { timeline, formulaDur, captionDur, edlDuration } from '@cb/renderer';
 import { newId, WORLDS, ACCENTS, type ReelProject, type Caption } from '@cb/schema';
 import { useStore } from '../store';
-import { Close, Trash, Check, Alert } from '../icons';
+import { Close, Trash, Check, Alert, Scissors, Speaker } from '../icons';
+import { api } from '../api';
+import { splitAtPlayhead, canSplitAt } from './actions';
+import { previewSfx, sfxName, useSfxMeta } from './sfxAudio';
 
 const ACCENT_TR: Record<string, string> = { orange: 'turuncu', sage: 'adaçayı', lav: 'lavanta', sky: 'gök', gold: 'altın', ink: 'mürekkep' };
 
@@ -14,8 +17,12 @@ function move<T>(xs: T[], i: number, d: number): T[] {
   return out;
 }
 
-export function Inspector({ project }: { project: ReelProject }) {
+export function Inspector({ project, onCloseProject }: { project: ReelProject; onCloseProject?: () => void }) {
   const sel = useStore((s) => s.selection);
+  if (sel?.kind === 'sfx') {
+    const i = project.sfx.findIndex((c) => c.id === sel.id);
+    if (i >= 0) return <SfxInspector project={project} i={i} />;
+  }
   if (sel?.kind === 'caption') {
     const i = project.captions.findIndex((c) => c.id === sel.id);
     if (i >= 0) return <CaptionInspector project={project} i={i} />;
@@ -28,7 +35,7 @@ export function Inspector({ project }: { project: ReelProject }) {
     const i = project.scenes.findIndex((c) => c.id === sel.id);
     if (i >= 0) return <SceneInspector project={project} i={i} />;
   }
-  return <ProjectInspector project={project} />;
+  return <ProjectInspector project={project} onClose={onCloseProject} />;
 }
 
 /** Seçili öğe başlığı: sağda sil ve seçimi kaldır (Esc). Carousel öğe paneliyle aynı düzen. */
@@ -254,6 +261,7 @@ function CutInspector({ project, i }: { project: ReelProject; i: number }) {
           <button className="btn small" disabled={i === project.edl.length - 1} onClick={() => updateReel((p) => ({ ...p, edl: move(p.edl, i, 1) }))}>
             Arkaya al
           </button>
+          <SplitButton project={project} />
         </div>
       </div>
     </>
@@ -307,7 +315,7 @@ function SceneInspector({ project, i }: { project: ReelProject; i: number }) {
   );
 }
 
-function ProjectInspector({ project }: { project: ReelProject }) {
+function ProjectInspector({ project, onClose }: { project: ReelProject; onClose?: () => void }) {
   const { updateReel } = useStore.getState();
   const tl = useMemo(() => timeline(project.captions), [project.captions]);
   const edl = edlDuration(project);
@@ -328,7 +336,7 @@ function ProjectInspector({ project }: { project: ReelProject }) {
 
   return (
     <>
-      <Header title="Proje" />
+      <Header title="Proje" onClose={onClose} />
       <div className="section">
         <label className="field">
           <span>Başlık</span>
@@ -439,5 +447,64 @@ function ScenesSection({ project }: { project: ReelProject }) {
         </>
       )}
     </div>
+  );
+}
+
+function SplitButton({ project }: { project: ReelProject }) {
+  const time = useStore((s) => s.time);
+  return (
+    <button className="btn small" disabled={!canSplitAt(project, time)} onClick={() => splitAtPlayhead()} title="Oynatma kafasında böl (B)">
+      <Scissors size={15} /> Oynatma kafasında böl
+    </button>
+  );
+}
+
+function SfxInspector({ project, i }: { project: ReelProject; i: number }) {
+  const s = project.sfx[i];
+  const slug = useStore((st) => st.slug)!;
+  const dur = useSfxMeta((m) => m.meta[s.src]?.dur);
+  const { updateReel, select, setTime } = useStore.getState();
+  const set = (patch: Partial<typeof s>, key?: string) => updateReel((p) => ({ ...p, sfx: p.sfx.map((k) => (k.id === s.id ? { ...k, ...patch } : k)) }), key);
+  const tl = timeline(project.captions);
+  return (
+    <>
+      <Header
+        title={`Ses efekti: ${sfxName(s.src)}`}
+        onClose={() => select(null)}
+        onDelete={() => {
+          updateReel((p) => ({ ...p, sfx: p.sfx.filter((k) => k.id !== s.id) }));
+          select(null);
+        }}
+      />
+      <div className="section">
+        <div className="row">
+          <label className="field grow">
+            <span>Başlangıç (sn)</span>
+            <input className="input tnum" type="number" step={0.05} min={0} value={s.at} onChange={(e) => set({ at: Math.max(0, Number(e.target.value) || 0) }, 'sfx-at-' + s.id)} />
+          </label>
+          <button className="btn small" style={{ alignSelf: 'end', minHeight: 32 }} onClick={() => set({ at: Math.round(useStore.getState().time * 1000) / 1000 })}>
+            Oynatma kafasına al
+          </button>
+        </div>
+        <label className="field">
+          <span>
+            Ses düzeyi <b className="tnum">{Math.round(s.gain * 100)}%</b>
+          </span>
+          <input type="range" min={0} max={2} step={0.05} value={s.gain} onChange={(e) => set({ gain: Number(e.target.value) }, 'sfx-gain-' + s.id)} aria-label="Ses düzeyi" />
+        </label>
+        <div className="row wrap">
+          <button className="btn small" onClick={() => void previewSfx(s.src, api.mediaUrl(slug, s.src), s.gain)}>
+            <Speaker size={15} /> Dinle
+          </button>
+          <button className="btn small" onClick={() => setTime(s.at)}>
+            Başına git
+          </button>
+        </div>
+        <p className="hint">
+          {dur !== undefined && <>Süre {dur.toFixed(2)} sn. </>}
+          {s.at >= tl.duration ? <span className="warn">Reel {tl.duration.toFixed(1)} sn'de bitiyor; bu efekt export'ta duyulmaz.</span> : project.audio === 'speech' ? 'Konuşma sesinin üstüne karışır.' : 'Sessiz reelde tek ses bu efektler olur.'}
+        </p>
+      </div>
+    </>
   );
 }

@@ -2,10 +2,114 @@ import { useEffect, useState } from 'react';
 import { newId, type ReelProject, type Cut } from '@cb/schema';
 import { useStore } from '../store';
 import { api } from '../api';
+import { previewSfx } from './sfxAudio';
+import { Speaker, Plus } from '../icons';
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
 export function MediaPanel({ slug, project }: { slug: string; project: ReelProject }) {
+  const [tab, setTab] = useState<'video' | 'audio'>('video');
+  return (
+    <aside className="left" aria-label="Medya">
+      <div className="tabs" role="tablist" aria-label="Medya türü">
+        <button role="tab" id="mt-video" aria-controls="mp-video" aria-selected={tab === 'video'} onClick={() => setTab('video')}>
+          Video
+        </button>
+        <button role="tab" id="mt-audio" aria-controls="mp-audio" aria-selected={tab === 'audio'} onClick={() => setTab('audio')}>
+          Ses efektleri{project.sfx.length > 0 && <span className="count tnum">{project.sfx.length}</span>}
+        </button>
+      </div>
+      {tab === 'video' ? (
+        <div role="tabpanel" id="mp-video" aria-labelledby="mt-video">
+          <VideoPanel slug={slug} project={project} />
+        </div>
+      ) : (
+        <div role="tabpanel" id="mp-audio" aria-labelledby="mt-audio">
+          <SfxPanel slug={slug} />
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/** Ses efektleri: hazır efektler (CC0, ffmpeg ile üretildi) ve dosyadan ekleme. Oynatma kafasına eklenir. */
+function SfxPanel({ slug }: { slug: string }) {
+  const [builtins, setBuiltins] = useState<{ name: string; file: string }[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const time = useStore((s) => s.time);
+  useEffect(() => {
+    api
+      .builtinSfx()
+      .then((r) => setBuiltins(r.sfx))
+      .catch((e) => setError(e.message));
+  }, []);
+
+  const add = (srcs: string[]) => {
+    const st = useStore.getState();
+    const at = Math.round(st.time * 1000) / 1000;
+    const items = srcs.map((src) => ({ id: newId('sfx'), src, at, gain: 1 }));
+    if (!items.length) return;
+    st.updateReel((p) => ({ ...p, sfx: [...p.sfx, ...items] }));
+    st.select({ kind: 'sfx', id: items[items.length - 1].id });
+  };
+
+  async function run(fn: () => Promise<string[]>) {
+    setError(null);
+    setBusy(true);
+    try {
+      add(await fn());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="panel-h">
+        <h2>Ses efektleri</h2>
+        <button
+          className="btn small"
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              const { paths } = await api.pick('audio');
+              if (!paths.length) return [];
+              return (await api.addSfx(slug, { paths })).srcs;
+            })
+          }
+        >
+          Dosyadan ekle
+        </button>
+      </div>
+      <div className="section" style={{ gap: 4 }}>
+        <p className="hint" style={{ margin: '0 0 6px' }}>
+          Efekt oynatma kafasına (<span className="tnum">{time.toFixed(2)} sn</span>) eklenir. Timeline'da sürükleyerek kaydırabilirsin.
+        </p>
+        {!builtins && !error && <p className="hint">Yükleniyor…</p>}
+        {builtins?.map((b) => (
+          <div key={b.file} className="sfx-row">
+            <button className="btn ghost icon small" aria-label={`${b.name} efektini dinle`} title="Dinle" onClick={() => void previewSfx('builtin:' + b.file, api.builtinSfxUrl(b.file))}>
+              <Speaker size={15} />
+            </button>
+            <span className="name">{b.name}</span>
+            <button className="btn small" disabled={busy} aria-label={`${b.name} efektini ekle`} onClick={() => void run(async () => (await api.addSfx(slug, { builtin: b.name })).srcs)}>
+              <Plus size={14} /> Ekle
+            </button>
+          </div>
+        ))}
+        {error && <p className="err">{error}</p>}
+        <p className="hint" style={{ marginTop: 8 }}>
+          Hazır efektler bu editör için ffmpeg ile üretildi (CC0), telifsiz. Dosyalar projenin media/ klasörüne kopyalanır.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function VideoPanel({ slug, project }: { slug: string; project: ReelProject }) {
   const sel = useStore((s) => s.selection);
   const jobs = useStore((s) => s.jobs);
   const { updateReel, select } = useStore.getState();
@@ -67,9 +171,9 @@ export function MediaPanel({ slug, project }: { slug: string; project: ReelProje
   const jobFor = (clipId: string) => Object.values(jobs).filter((j) => j.target === clipId && j.status === 'running');
 
   return (
-    <aside className="left" aria-label="Medya">
+    <>
       <div className="panel-h">
-        <h2>Medya</h2>
+        <h2>Videolar</h2>
         <button className="btn small" onClick={addVideos} disabled={busy}>
           Video ekle
         </button>
@@ -158,6 +262,6 @@ export function MediaPanel({ slug, project }: { slug: string; project: ReelProje
           </div>
         </div>
       )}
-    </aside>
+    </>
   );
 }

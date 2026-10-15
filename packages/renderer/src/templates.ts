@@ -59,6 +59,7 @@ export function starterReel(title: string): ReelProject {
     ].map(([text, emph, scene]) => ({ id: newId('cap'), text: text as string, emph: emph as string | null, scene: scene as number, dur: null })),
     clips: [],
     edl: [],
+    sfx: [],
   };
 }
 
