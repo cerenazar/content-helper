@@ -1,0 +1,9 @@
+/* Önizleme ve export aynı fontları kullanır (Inter Display: OFL, DejaVu: Bitstream Vera lisansı). */
+@font-face { font-family: 'Inter Display'; font-weight: 600; src: url('./InterDisplay-SemiBold.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'Inter Display'; font-weight: 700; src: url('./InterDisplay-Bold.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'Inter Display'; font-weight: 800; src: url('./InterDisplay-ExtraBold.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'Inter Display'; font-weight: 900; src: url('./InterDisplay-Black.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'DejaVu Sans Mono'; font-weight: 400 500; src: url('./DejaVuSansMono.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'DejaVu Sans Mono'; font-weight: 600 900; src: url('./DejaVuSansMono-Bold.ttf') format('truetype'); font-display: block; }
+/* Inter (metin yüzü, değişken ağırlık): carousel "Ceren's Picks" stili. */
+@font-face { font-family: 'Inter'; font-weight: 100 900; src: url('./InterVariable.woff2') format('woff2'); font-display: block; }
