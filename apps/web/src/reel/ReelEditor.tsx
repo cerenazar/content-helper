@@ -3,7 +3,7 @@ import { timeline } from '@cb/renderer';
 import type { ReelProject } from '@cb/schema';
 import { useStore } from '../store';
 import { api } from '../api';
-import { TopBar } from '../Editor';
+import { TopBar, ClaudeColumn } from '../Editor';
 import { Preview } from './Preview';
 import { Timeline } from './Timeline';
 import { Inspector } from './Inspector';
@@ -197,17 +197,7 @@ export function ReelEditor({ slug, claudePanel, claudeRunning }: { slug: string;
         </aside>
       )}
 
-      <aside className="right claude-col" aria-label="Claude">
-        <div className="panel-h claude-h">
-          <h2>Claude</h2>
-          {claudeRunning && (
-            <span className="claude-run" role="status">
-              <span className="dot" aria-hidden /> düzenliyor
-            </span>
-          )}
-        </div>
-        <div className="claude-body">{claudePanel}</div>
-      </aside>
+      <ClaudeColumn running={claudeRunning}>{claudePanel}</ClaudeColumn>
 
       <div
         className="tl-split"

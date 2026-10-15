@@ -49,11 +49,13 @@ export function Editor({ slug }: { slug: string }) {
 
   if (error)
     return (
-      <main className="home">
-        <div className="home-inner">
-          <p className="err">Proje açılamadı: {error}</p>
-          <a className="btn" href="#/">
-            Projelere dön
+      <main className="state-page">
+        <div role="alert">
+          <h1>Proje açılamadı</h1>
+          <p className="err">{error}</p>
+          <p>Proje klasörü taşınmış ya da project.json bozulmuş olabilir.</p>
+          <a className="btn primary" href="#/projects">
+            Projelerime dön
           </a>
         </div>
       </main>
@@ -95,5 +97,22 @@ export function TopBar({ slug, children }: { slug: string; children?: React.Reac
       </button>
       {children}
     </header>
+  );
+}
+
+/** Sağdaki her zaman açık Claude sütunu: reel ve carousel editöründe aynı. */
+export function ClaudeColumn({ running, children }: { running: boolean; children: React.ReactNode }) {
+  return (
+    <aside className="right claude-col" aria-label="Claude">
+      <div className="panel-h claude-h">
+        <h2>Claude</h2>
+        {running && (
+          <span className="claude-run" role="status">
+            <span className="dot" aria-hidden /> düzenliyor
+          </span>
+        )}
+      </div>
+      <div className="claude-body">{children}</div>
+    </aside>
   );
 }

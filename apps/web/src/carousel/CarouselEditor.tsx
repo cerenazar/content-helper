@@ -3,8 +3,9 @@ import { slideEl as el, picksCoverSlide, picksPickSlide, moveItem, reorderZ, pas
 import { SLIDE, newId, type CarouselProject, type Slide, type SlideElement } from '@cb/schema';
 import { useStore, selectedElementIds } from '../store';
 import { api } from '../api';
-import { TopBar } from '../Editor';
-import { ChevronLeft, ChevronRight, Alert, Copy, Trash } from '../icons';
+import { TopBar, ClaudeColumn } from '../Editor';
+import { ChevronLeft, ChevronRight, Alert, Copy, Trash, Keyboard } from '../icons';
+import { ShortcutsDialog, CAROUSEL_SHORTCUTS } from '../reel/Shortcuts';
 import { ZoomIn, ZoomOut } from './icons';
 import { useImages, useVideos } from './media';
 import { Stage, TEXT_TYPES, type Zoom } from './Stage';
@@ -26,12 +27,12 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
   const flash = useStore((s) => s.flash);
   const jobs = useStore((s) => s.jobs);
   const { updateCarousel, select } = useStore.getState();
-  const [tab, setTab] = useState<'edit' | 'claude'>('edit');
   const [exportJob, setExportJob] = useState<string | null>(null);
   const [exportErr, setExportErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [zoom, setZoom] = useState<Zoom>('fit');
   const [playing, setPlaying] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
   const images = useImages(slug, project);
   const videos = useVideos(slug, project);
   const [overflow, setOverflowState] = useState<Map<string, number>>(new Map());
@@ -54,10 +55,6 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
 
   // Görseller + oynatılan videoların son karesi: aynı renderer'a görsel gibi verilir.
   const media = new Map<string, ImageSource>([...images, ...videos.frames]);
-
-  useEffect(() => {
-    if (claudeRunning) setTab('claude');
-  }, [claudeRunning]);
 
   // Slayt değişince düzenleme biter, videolar durur.
   useEffect(() => {
@@ -147,10 +144,12 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
   // ---- klavye ----
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
+      if (keysOpen) return;
       const t = e.target as HTMLElement;
       if (t.closest('input, textarea, select, [contenteditable], [role="menu"]')) return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
+      if (e.key === '?') return void (e.preventDefault(), setKeysOpen(true));
       // Yakınlaştırma
       if (mod && (k === '=' || k === '+')) return void (e.preventDefault(), zoomBy(1));
       if (mod && k === '-') return void (e.preventDefault(), zoomBy(-1));
@@ -330,15 +329,8 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
         </div>
         <div className="layers-wrap">
           <Layers slide={slide} picks={picks} selIds={selIds} selectIds={selectIds} setElements={setElements} patchEls={patchEls} />
+          {picks && <p className="hint layers-note">Üst/alt bant, seri adı ve sayfa numarası otomatik çizilir.</p>}
         </div>
-        <details className="section shortcuts">
-          <summary>Kısayollar</summary>
-          <p className="hint">
-            Çift tık ya da Enter: metni düzenle · ⇧-tık / boş alanda sürükle: çoklu seçim · ⌘A tümü · ⌘C ⌘V ⌘D kopyala, yapıştır, çoğalt · ⌫ sil ·
-            oklar 1 px, ⇧ 10 px · ⌘] ⌘[ katman · ⌘+ ⌘− ⌘0 yakınlaştır · sürüklerken ⌘: yapışma kapalı · köşede ⇧: oran sabit (görsel, pencere)
-            {picks && ' · Üst/alt bant, seri adı ve sayfa numarası otomatik çizilir.'}
-          </p>
-        </details>
       </aside>
 
       <section className="stage" aria-label="Slayt">
@@ -365,8 +357,9 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
           videoInfo={videos.info}
         />
         <div className="transport">
-          <span className="hint">
-            Slayt {index + 1} / {project.slides.length} · 1080×1350{vids.length ? ' · video (MP4)' : ''}
+          <span className="slide-pos">
+            Slayt <b className="tnum">{index + 1}</b> / <span className="tnum">{project.slides.length}</span>
+            {vids.length ? <span className="hint"> · video (MP4)</span> : null}
           </span>
           {overflow.size > 0 && (
             <span className="warn row" style={{ gap: 6 }}>
@@ -401,60 +394,55 @@ export function CarouselEditor({ slug, claudePanel, claudeRunning }: { slug: str
             >
               <ChevronRight size={15} />
             </button>
-            <button className="btn small" onClick={() => strip.duplicate(index)}>
-              <Copy size={15} /> Çoğalt
+            <button className="btn small icon" aria-label="Slaydı çoğalt" title="Slaydı çoğalt" onClick={() => strip.duplicate(index)}>
+              <Copy size={15} />
             </button>
-            <button className="btn small danger" disabled={project.slides.length <= 1} onClick={() => strip.remove(index)}>
-              <Trash size={15} /> Slaydı sil
+            <button className="btn small icon danger" aria-label="Slaydı sil" title="Slaydı sil" disabled={project.slides.length <= 1} onClick={() => strip.remove(index)}>
+              <Trash size={15} />
+            </button>
+            <button className="btn ghost icon small" onClick={() => setKeysOpen(true)} aria-label="Klavye kısayolları (?)" title="Klavye kısayolları (?)">
+              <Keyboard size={16} />
             </button>
           </div>
         </div>
       </section>
 
-      <aside className="right" aria-label="Yan panel">
-        <div className="tabs" role="tablist">
-          <button role="tab" aria-selected={tab === 'edit'} onClick={() => setTab('edit')}>
-            Düzenle
-          </button>
-          <button role="tab" className="claude-tab" aria-selected={tab === 'claude'} onClick={() => setTab('claude')}>
-            Claude
-            {claudeRunning && <span className="dot" aria-label="çalışıyor" />}
-          </button>
-        </div>
-        <div className="tabpanel" role="tabpanel">
-          {tab === 'claude' ? (
-            claudePanel
-          ) : selEls.length > 1 ? (
-            <MultiInspector slide={slide} ids={selIds} setElements={setElements} onClose={() => selectIds([])} onDelete={deleteSelected} />
-          ) : selEls.length === 1 ? (
-            <ElementInspector
-              key={selEls[0].id}
-              e={selEls[0]}
-              picks={picks}
-              onPickImage={async () => {
-                const src = await pickImage(slug);
-                if (src) setEl(selEls[0].id, { src });
-              }}
-              onPickVideo={async () => {
-                const video = await pickVideo(slug);
-                if (video) setEl(selEls[0].id, { video });
-              }}
-              video={selEls[0].video ? videos.info.get(selEls[0].video) : undefined}
-              arrange={{ slide, ids: selIds, setElements }}
-              need={overflow.get(selEls[0].id)}
-              set={(p, k) => setEl(selEls[0].id, p, k)}
-              onClose={() => selectIds([])}
-              onDelete={deleteSelected}
-            />
-          ) : (
-            <CarouselInspector slug={slug} project={project} slide={slide} index={index} setSlide={setSlide} />
-          )}
-        </div>
+      <aside className="insp" aria-label="Özellikler">
+        {selEls.length > 1 ? (
+          <MultiInspector slide={slide} ids={selIds} setElements={setElements} onClose={() => selectIds([])} onDelete={deleteSelected} />
+        ) : selEls.length === 1 ? (
+          <ElementInspector
+            key={selEls[0].id}
+            e={selEls[0]}
+            picks={picks}
+            onPickImage={async () => {
+              const src = await pickImage(slug);
+              if (src) setEl(selEls[0].id, { src });
+            }}
+            onPickVideo={async () => {
+              const video = await pickVideo(slug);
+              if (video) setEl(selEls[0].id, { video });
+            }}
+            video={selEls[0].video ? videos.info.get(selEls[0].video) : undefined}
+            arrange={{ slide, ids: selIds, setElements }}
+            need={overflow.get(selEls[0].id)}
+            set={(p, k) => setEl(selEls[0].id, p, k)}
+            onClose={() => selectIds([])}
+            onDelete={deleteSelected}
+          />
+        ) : (
+          <CarouselInspector slug={slug} project={project} slide={slide} index={index} setSlide={setSlide} />
+        )}
       </aside>
+
+      <ClaudeColumn running={claudeRunning}>{claudePanel}</ClaudeColumn>
 
       <div className="bottom">
         <SlideStrip project={project} index={index} images={media} flash={flash} act={strip} />
       </div>
+      {keysOpen && (
+        <ShortcutsDialog items={CAROUSEL_SHORTCUTS} onClose={() => setKeysOpen(false)} />
+      )}
     </div>
   );
 }
