@@ -208,7 +208,7 @@ export function Stage(props: StageProps) {
 
   return (
     <div className={'stage-scroll' + (zoom === 'fit' ? ' fit' : '')} ref={scrollRef} onPointerDown={startMarquee}>
-      <div className="preview slide slide-stage" ref={stageRef} style={zoom === 'fit' ? undefined : { width: SLIDE.W * zoom }}>
+      <div className="slide-stage" ref={stageRef} style={zoom === 'fit' ? undefined : { width: SLIDE.W * zoom }}>
         <SlideCanvas project={drawProject} index={index} images={media} onOverflow={props.setOverflow} live={props.playing} />
         {slide.elements.map((e) =>
           e.hidden ? null : (
