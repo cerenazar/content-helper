@@ -1,10 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ROOT } from './paths';
+import { ROOT, SERVER_DIR } from './paths';
 import { emit, HUB } from './events';
 import { runClaude, type ClaudeRun } from './claude-run';
 import { DEFAULT_NICHE } from './analysis';
-import { cleanRun, extractHooks, researchPrompt, stepFor, KINDS, type ResearchKind, type ResearchRun } from './research-lib';
+import { cleanRun, extractHooks, researchPrompt, stepFor, KINDS, RESEARCH_SKILL, type ResearchKind, type ResearchRun } from './research-lib';
 
 /** Araştır bölümü: niş tanımı ve geçmiş taramalar `$CB_ROOT/.research.json`'da, Claude'un çalışma klasörü `.research/<id>/`. */
 interface Store {
@@ -113,11 +113,13 @@ export async function startResearch(body: { kind?: unknown; prompt?: unknown }):
 
   const cwd = path.join(ROOT, '.research', id);
   await fs.mkdir(cwd, { recursive: true });
+  // Skill, çalışma klasörünün proje skill'i olarak yüklenir (`.claude/skills/<ad>/SKILL.md`).
+  await fs.cp(path.join(SERVER_DIR, 'skills', RESEARCH_SKILL), path.join(cwd, '.claude', 'skills', RESEARCH_SKILL), { recursive: true });
   const today = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
   const c = runClaude({
     cwd,
     prompt: researchPrompt(kind, niche, prompt, today),
-    tools: ['WebSearch', 'WebFetch'],
+    tools: ['Skill', 'WebSearch', 'WebFetch'],
     onTool: (name, input) => void updateRun(id, (r) => ({ ...r, steps: [...r.steps, stepFor(name, input)] })),
   });
   active.set(id, c);

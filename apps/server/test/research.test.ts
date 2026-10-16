@@ -63,9 +63,17 @@ describe('researchPrompt', () => {
     expect(p).toContain('"Raycast"');
     expect(p).toContain('```json');
     expect(p).toContain('Türkçe');
+    expect(p).toContain('cerenbuilds-arastirma');
+  });
+  it('skill dosyası repoda var ve adı istemdekiyle aynı', async () => {
+    const fs = await import('node:fs/promises');
+    const md = await fs.readFile(new URL('../skills/cerenbuilds-arastirma/SKILL.md', import.meta.url), 'utf8');
+    expect(md).toMatch(/^---\nname: cerenbuilds-arastirma\n/);
+    expect(md).toContain('```json');
   });
   it('araç adımlarını Türkçe özetler', () => {
     expect(stepFor('WebSearch', { query: 'claude code reels' })).toBe("Web'de aranıyor: claude code reels");
     expect(stepFor('WebFetch', { url: 'https://www.example.com/x' })).toBe('Sayfa okunuyor: example.com');
+    expect(stepFor('Skill', { skill: 'cerenbuilds-arastirma' })).toBe("Araştırma skill'i yükleniyor");
   });
 });
